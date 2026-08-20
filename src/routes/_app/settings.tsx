@@ -6,6 +6,8 @@ import { useAppStore } from "@/lib/store";
 import { integrationAdapters } from "@/lib/integrations";
 import { NativeSelect } from "@/components/ui/native-select";
 import { AI_DRAFTING_MODES, TRANSPORT_TYPES, TRANSPORT_LABELS } from "@/lib/types";
+import { loadLane } from "@/lib/lane-server";
+import { useState } from "react";
 
 export const Route = createFileRoute("/_app/settings")({ component: SettingsPage });
 
@@ -13,6 +15,24 @@ function SettingsPage() {
   const settings = useAppStore((s) => s.settings);
   const setSettings = useAppStore((s) => s.setSettings);
   const resetDemo = useAppStore((s) => s.resetDemo);
+  const isStaticDemo = import.meta.env.VITE_DEPLOY_TARGET === "pages" || import.meta.env.VITE_AUTH_ENABLED === "false";
+  const [exporting, setExporting] = useState(false);
+
+  async function exportLaneBackup() {
+    setExporting(true);
+    try {
+      const snapshot = await loadLane();
+      const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), ...snapshot }, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `toyota-advisor-lane-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
@@ -69,11 +89,16 @@ function SettingsPage() {
         <h2 id="appearance-title" className="text-sm font-semibold">Appearance</h2>
         <Field label="Color theme"><NativeSelect value={settings.appearance} onChange={(event) => setSettings({ appearance: event.target.value as typeof settings.appearance })}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></NativeSelect></Field>
       </section>
-      <section className="rounded-xl bg-elevated p-4 shadow-[var(--shadow-border)]" aria-labelledby="demo-title">
+      {isStaticDemo ? <section className="rounded-xl bg-elevated p-4 shadow-[var(--shadow-border)]" aria-labelledby="demo-title">
         <h2 id="demo-title" className="text-sm font-semibold">Demo Mode</h2>
         <p className="mt-1 text-xs text-muted">Uses fictional service-lane records only. It is never presented as a connected dealership feed.</p>
         <Button type="button" variant="secondary" className="mt-3" onClick={() => resetDemo(Date.now())}>Reset fictional demo lane</Button>
-      </section>
+      </section> : null}
+      {!isStaticDemo ? <section className="rounded-xl bg-elevated p-4 shadow-[var(--shadow-border)]" aria-labelledby="backup-title">
+        <h2 id="backup-title" className="text-sm font-semibold">Backup</h2>
+        <p className="mt-1 text-xs text-muted">Download the current authenticated lane, including active and completed records, as JSON.</p>
+        <Button type="button" variant="secondary" className="mt-3" onClick={() => void exportLaneBackup()} disabled={exporting}>{exporting ? "Preparing…" : "Export lane backup"}</Button>
+      </section> : null}
       <Link to="/fleet" className="text-sm font-medium text-muted underline-offset-4 hover:text-ink hover:underline">
         Open separate fleet board
       </Link>

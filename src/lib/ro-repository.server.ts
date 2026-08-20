@@ -1,6 +1,5 @@
 import type { Sql } from "./db.ts";
 import { assertTransition, type WorkflowState } from "./ro-domain.ts";
-import type { RepairOrder } from "./types.ts";
 
 export type RepairOrderRecord = {
   id: string;
@@ -134,20 +133,6 @@ export class RepairOrderRepository {
       blockersByRo.set(row.ro_id, list);
     }
     return records.map((record) => ({ record, recommendations: recommendationsByRo.get(record.id) ?? [], blockers: blockersByRo.get(record.id) ?? [] }));
-  }
-
-  async importDemoIfEmpty(userId: string, ros: RepairOrder[]): Promise<number> {
-    const existing = await this.sql.query<{ count: number }>("select count(*)::int as count from repair_orders where user_id = $1", [userId]);
-    if ((existing[0]?.count ?? 0) > 0) return 0;
-    const state: Record<RepairOrder["status"], WorkflowState> = { checked_in: "arrived", waiting_technician: "written", diagnosing: "diagnosing", waiting_video: "diagnosing", recommendations_ready: "estimate_ready", waiting_approval: "awaiting_approval", approved: "approved", waiting_parts: "repairing", repair_in_progress: "repairing", quality_check: "qc", ready_for_pickup: "ready", completed: "delivered" };
-    for (const ro of ros) {
-      await this.createManual({ id: ro.id, userId, actorId: userId, roNumber: ro.roNumber, customerName: ro.customerName, phone: ro.customerPhone || undefined, year: ro.year, model: ro.vehicle, vin: ro.vin || undefined, mileage: ro.mileage, concern: ro.concern || undefined, technicianName: ro.technician === "Unassigned" ? undefined : ro.technician, transportation: ro.transportation, waitingCustomer: ro.transportation === "waiting", promiseAt: ro.promiseTime, updateIntervalMinutes: 90 });
-      await this.sql.query("update repair_orders set workflow_state = $1, previous_state = null, state_entered_at = $2, diagnosis = $3, technician_findings = $4, last_customer_contact_at = $5, next_update_due_at = $6, recommended_total = $7, approved_total = $8, declined_total = $9, carryover = $10 where id = $11 and user_id = $12", [state[ro.status], ro.statusChangedAt, ro.diagnosis || null, ro.techNotes || null, ro.lastCustomerUpdate, ro.nextUpdateDue, ro.lines.filter((line) => line.state === "recommended").reduce((sum, line) => sum + line.amount, 0), ro.lines.filter((line) => line.state === "approved").reduce((sum, line) => sum + line.amount, 0), ro.lines.filter((line) => line.state === "declined").reduce((sum, line) => sum + line.amount, 0), false, ro.id, userId]);
-      for (const line of ro.lines) {
-        await this.sql.query("insert into ro_recommendations (id, ro_id, description, amount, labor_hours, state, created_at, decided_at) values ($1,$2,$3,$4,$5,$6,$7,$8)", [`${ro.id}:${line.id}`, ro.id, line.description, line.amount, line.hours, line.state, ro.createdAt, line.state === "recommended" ? null : ro.statusChangedAt]);
-      }
-    }
-    return ros.length;
   }
 
   async getByNumber(userId: string, roNumber: string): Promise<RepairOrderRecord | null> {

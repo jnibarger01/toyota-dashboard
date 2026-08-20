@@ -50,6 +50,8 @@ type LaneState = {
 
 export type LaneSnapshot = Pick<LaneState, "ros" | "followUps" | "scratch" | "settings" | "seededAt">;
 
+const IS_STATIC_DEMO = import.meta.env.VITE_DEPLOY_TARGET === "pages" || import.meta.env.VITE_AUTH_ENABLED === "false";
+
 function seedAll(now = DEMO_NOW): Pick<LaneState, "ros" | "followUps" | "scratch" | "settings" | "seededAt"> {
   return {
     ros: createSeedData(now),
@@ -64,9 +66,13 @@ function seedAll(now = DEMO_NOW): Pick<LaneState, "ros" | "followUps" | "scratch
   };
 }
 
+function emptyAll(now = Date.now()): Pick<LaneState, "ros" | "followUps" | "scratch" | "settings" | "seededAt"> {
+  return { ros: [], followUps: [], scratch: [], settings: { ...DEFAULT_SETTINGS }, seededAt: now };
+}
+
 export const useAppStore = create<LaneState>()(
   (set, get) => ({
-      ...seedAll(),
+      ...(IS_STATIC_DEMO ? seedAll() : emptyAll()),
       selectedId: null,
       query: "",
       boardFilter: "all",
@@ -130,7 +136,10 @@ export const useAppStore = create<LaneState>()(
       addScratchNote: (note) => set({ scratch: [note, ...get().scratch] }),
       removeScratch: (id) => set({ scratch: get().scratch.filter((s) => s.id !== id) }),
       setSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
-      resetDemo: (now = Date.now()) => set({ ...seedAll(now), selectedId: null, query: "", boardFilter: "all" }),
+      resetDemo: (now = Date.now()) => {
+        if (!IS_STATIC_DEMO) return;
+        set({ ...seedAll(now), selectedId: null, query: "", boardFilter: "all" });
+      },
       hydrate: (snapshot, persist) => set({ ...snapshot, hydrated: true, persist, loadError: null, selectedId: null, query: "", boardFilter: "all" }),
       setLoadError: (loadError) => set({ loadError }),
   }),

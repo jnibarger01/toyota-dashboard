@@ -50,6 +50,7 @@ type Input = {
 };
 
 export const rewriteAdvisorText = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .validator((input: Input) => {
     const source = (input.source ?? "").trim();
     return {

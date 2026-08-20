@@ -12,6 +12,7 @@ export function SettingsPage() {
   const setSettings = useFleetStore((s) => s.setSettings);
   const hydrate = useFleetStore((s) => s.hydrate);
   const persist = useFleetStore((s) => s.persist);
+  const isStaticDemo = import.meta.env.VITE_DEPLOY_TARGET === "pages" || import.meta.env.VITE_AUTH_ENABLED === "false";
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
@@ -43,13 +44,13 @@ export function SettingsPage() {
         </Field>
       </div>
 
-      <button
+      {isStaticDemo ? <button
         type="button"
         className="text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
         onClick={() => hydrate(createSeedData(), persist)}
       >
         Reset demo fleet
-      </button>
+      </button> : null}
     </div>
   );
 }
