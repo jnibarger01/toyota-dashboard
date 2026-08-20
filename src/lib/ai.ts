@@ -1,4 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "@/lib/auth/middleware";
+import { RepairOrderRepository } from "@/lib/ro-repository.server";
+import { buildVerifiedRoFacts } from "@/lib/ro-ai-context";
 
 export const REWRITE_MODES = [
   "update_technical",
@@ -41,6 +44,7 @@ const MODE_INSTRUCTIONS: Record<RewriteMode, string> = {
 type Input = {
   mode: RewriteMode;
   source: string;
+  tone?: "concise" | "warm";
   vehicle?: string;
   concern?: string;
 };
@@ -51,6 +55,7 @@ export const rewriteAdvisorText = createServerFn({ method: "POST" })
     return {
       mode: input.mode,
       source,
+      tone: input.tone === "warm" ? "warm" : "concise",
       vehicle: input.vehicle?.trim() || undefined,
       concern: input.concern?.trim() || undefined,
     };
@@ -79,7 +84,7 @@ export const rewriteAdvisorText = createServerFn({ method: "POST" })
           },
           {
             role: "user",
-            content: `${mode}\n\nVehicle: ${data.vehicle ?? "—"}\nConcern: ${data.concern ?? "—"}\n\nSource:\n${data.source}`,
+            content: `${mode}\n\nPreferred tone: ${data.tone}\nVehicle: ${data.vehicle ?? "—"}\nConcern: ${data.concern ?? "—"}\n\nSource:\n${data.source}`,
           },
         ],
       }),
@@ -87,4 +92,37 @@ export const rewriteAdvisorText = createServerFn({ method: "POST" })
     if (!res.ok) return { ok: false as const, error: `xAI API error ${res.status}` };
     const body = (await res.json()) as { choices: { message: { content: string } }[] };
     return { ok: true as const, text: body.choices[0]?.message.content ?? "" };
+  });
+
+/**
+ * Customer drafts may only use a server-loaded, allowlisted RO fact object.
+ * Creating a draft never records contact or implies that a message was sent.
+ */
+export const draftVerifiedCustomerUpdate = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { roId?: string; tone?: "concise" | "warm"; mode?: RewriteMode }) => ({
+    roId: String(input.roId ?? ""),
+    tone: input.tone === "warm" ? "warm" : "concise",
+    mode: input.mode && input.mode.startsWith("update_") ? input.mode : "update_simple" as RewriteMode,
+  }))
+  .handler(async ({ data, context }) => {
+    const apiKey = process.env.XAI_API_KEY;
+    if (!apiKey) return { ok: false as const, error: "AI is not available in this environment" };
+    const ro = await (await RepairOrderRepository.connect()).getById(context.userId, data.roId);
+    if (!ro) return { ok: false as const, error: "Repair order not found" };
+    const facts = buildVerifiedRoFacts(ro);
+    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "grok-4.5", max_tokens: 220,
+        messages: [
+          { role: "system", content: `Draft one customer-safe dealership update. ${MODE_INSTRUCTIONS[data.mode] ?? MODE_INSTRUCTIONS.update_simple} Use only the supplied JSON facts. Never infer or invent diagnoses, parts, prices, labor, availability, completion times, safety consequences, warranties, discounts, or policy. Omit missing fields. This is a draft only; do not claim it was sent.` },
+          { role: "user", content: JSON.stringify({ tone: data.tone, facts }) },
+        ],
+      }),
+    });
+    if (!res.ok) return { ok: false as const, error: `xAI API error ${res.status}` };
+    const body = (await res.json()) as { choices: { message: { content: string } }[] };
+    return { ok: true as const, text: body.choices[0]?.message.content ?? "", facts };
   });

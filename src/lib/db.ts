@@ -1,3 +1,5 @@
+import { assertProductionConfiguration } from "./runtime-policy";
+
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
 
@@ -15,6 +17,19 @@ const databaseUrl =
  * included. Swap in Neon later by just setting `DATABASE_URL`; no code changes.
  */
 export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
+
+// The embedded engine is a local-development fallback. Vercel traces server
+// JavaScript but does not package PGlite's multi-megabyte WASM/data payload as
+// a durable database; production therefore requires the platform-provided
+// DATABASE_URL rather than silently starting an ephemeral, partially traced DB.
+const isStaticDemo = rawDatabaseUrl === undefined && process.env.VITE_DEPLOY_TARGET === "pages";
+const isProductionServer = typeof window === "undefined" && (import.meta.env?.PROD ?? false);
+assertProductionConfiguration({
+  production: isProductionServer,
+  staticDemo: isStaticDemo,
+  databaseUrl,
+  authEnabled: process.env.VITE_AUTH_ENABLED !== "false",
+});
 
 /**
  * Minimal shared SQL surface, satisfied by both Neon and PGLite. Both the
@@ -62,6 +77,8 @@ const globalRef = globalThis as typeof globalThis & {
  */
 const OID_INT8 = 20;
 const OID_DATE = 1082;
+const OID_TIMESTAMP = 1114;
+const OID_TIMESTAMPTZ = 1184;
 const OID_INTERVAL = 1186;
 const identity = (v: string) => v;
 
@@ -90,6 +107,8 @@ function createNeonSql(): Promise<Sql> {
     const { Pool, types } = await import("pg");
     types.setTypeParser(OID_INT8, Number);
     types.setTypeParser(OID_DATE, identity);
+    types.setTypeParser(OID_TIMESTAMP, identity);
+    types.setTypeParser(OID_TIMESTAMPTZ, identity);
     types.setTypeParser(OID_INTERVAL, identity);
     const pool = new Pool({ connectionString: databaseUrl });
     return toSql(async <T>(text: string, params: unknown[]) => {
@@ -113,6 +132,8 @@ async function createPgliteSql(): Promise<Sql> {
       parsers: {
         [OID_INT8]: Number,
         [OID_DATE]: identity,
+        [OID_TIMESTAMP]: identity,
+        [OID_TIMESTAMPTZ]: identity,
         [OID_INTERVAL]: identity,
       },
     });
@@ -176,7 +197,11 @@ async function createSql(): Promise<Sql> {
         "or a server route loader, never from client code.",
     );
   }
-  return dbSource === "neon" ? createNeonSql() : createPgliteSql();
+  if (dbSource === "neon") return createNeonSql();
+  if (isProductionServer && !isStaticDemo) {
+    throw new Error("DATABASE_URL is required in production; PGLite is available only for local preview.");
+  }
+  return createPgliteSql();
 }
 
 /**
@@ -220,7 +245,7 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
  * module kick it off immediately (see bottom of file).
  */
 export function ensureDbReady(): Promise<void> {
-  if (dbSource !== "pglite") return Promise.resolve();
+  if (dbSource !== "pglite" || (isProductionServer && !isStaticDemo)) return Promise.resolve();
   return getSql().then(() => undefined);
 }
 
@@ -229,7 +254,7 @@ export function ensureDbReady(): Promise<void> {
 const globalBoot = globalThis as typeof globalThis & {
   __pgBootstrapPromise__?: Promise<void>;
 };
-if (typeof window === "undefined" && dbSource === "pglite") {
+if (typeof window === "undefined" && dbSource === "pglite" && (!isProductionServer || isStaticDemo)) {
   globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
     globalBoot.__pgBootstrapPromise__ = undefined;
     console.error("[db] PGLite bootstrap failed:", err);

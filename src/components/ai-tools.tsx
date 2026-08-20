@@ -1,9 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { rewriteAdvisorText, type RewriteMode } from "@/lib/ai";
+import { draftVerifiedCustomerUpdate, rewriteAdvisorText, type RewriteMode } from "@/lib/ai";
 import { useAppStore } from "@/lib/store";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const UPDATE_MODES: { id: RewriteMode; label: string }[] = [
   { id: "update_simple", label: "Simple" },
@@ -24,6 +24,7 @@ export function AiTools({ defaultTool }: { defaultTool?: "update" | "cleaner" | 
   const composer = useAppStore((s) => s.composer);
   const setComposer = useAppStore((s) => s.setComposer);
   const ros = useAppStore((s) => s.ros);
+  const settings = useAppStore((s) => s.settings);
   const tool = composer?.tool ?? defaultTool ?? "update";
   const ro = ros.find((r) => r.id === composer?.roId) ?? null;
   const [source, setSource] = useState(composer?.source ?? "");
@@ -35,23 +36,26 @@ export function AiTools({ defaultTool }: { defaultTool?: "update" | "cleaner" | 
   const [error, setError] = useState<string | null>(null);
 
   const modes = useMemo(() => {
-    if (tool === "cleaner") return NOTE_MODES;
-    if (tool === "concern") return [{ id: "concern" as const, label: "Concern" }];
-    return UPDATE_MODES;
-  }, [tool]);
+    const candidates = tool === "cleaner" ? NOTE_MODES : tool === "concern" ? [{ id: "concern" as const, label: "Concern" }] : UPDATE_MODES;
+    return candidates.filter((candidate) => settings.aiEnabledModes.includes(candidate.id));
+  }, [settings.aiEnabledModes, tool]);
+  useEffect(() => { if (modes.length && !modes.some((candidate) => candidate.id === mode)) setMode(modes[0]!.id); }, [mode, modes]);
 
   async function run() {
     setBusy(true);
     setError(null);
     try {
-      const res = await rewriteAdvisorText({
-        data: {
-          mode,
-          source: source || composer?.source || "",
-          vehicle: ro ? `${ro.year} ${ro.vehicle}` : undefined,
-          concern: ro?.concern,
-        },
-      });
+      const res = ro && tool === "update"
+        ? await draftVerifiedCustomerUpdate({ data: { roId: ro.id, tone: settings.aiDefaultTone, mode } })
+        : await rewriteAdvisorText({
+            data: {
+              mode,
+              source: source || composer?.source || "",
+              vehicle: ro ? `${ro.year} ${ro.vehicle}` : undefined,
+              concern: ro?.concern,
+              tone: settings.aiDefaultTone,
+            },
+          });
       if (res.ok) setOut(res.text);
       else setError(res.error);
     } catch {
@@ -71,20 +75,21 @@ export function AiTools({ defaultTool }: { defaultTool?: "update" | "cleaner" | 
           </button>
         </p>
       ) : null}
-      <NativeSelect className="h-9 bg-elevated" value={mode} onChange={(e) => setMode(e.target.value as RewriteMode)}>
+      {ro && tool === "update" ? <p className="text-xs text-subtle">Customer drafts use verified server-side RO facts. Creating a draft does not record or send a customer contact.</p> : null}
+      {modes.length ? <NativeSelect className="h-9 bg-elevated" value={mode} onChange={(e) => setMode(e.target.value as RewriteMode)}>
         {modes.map((m) => (
           <option key={m.id} value={m.id}>
             {m.label}
           </option>
         ))}
-      </NativeSelect>
+      </NativeSelect> : <p className="rounded-md bg-surface p-2 text-xs text-muted">No drafting modes are enabled. Enable one in Settings.</p>}
       <Textarea
         rows={6}
         value={source}
         onChange={(e) => setSource(e.target.value)}
         placeholder={tool === "concern" ? "Customer says…" : "Paste diagnosis, tech notes, or talking points"}
       />
-      <Button type="button" onClick={() => void run()} disabled={busy}>
+      <Button type="button" onClick={() => void run()} disabled={busy || !modes.length}>
         {busy ? "Writing…" : "Rewrite"}
       </Button>
       {error ? <p className="text-sm text-accent">{error}</p> : null}

@@ -33,6 +33,12 @@ export const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
 /** The upstream providers to render sign-in buttons for. */
 export { GROK_PROVIDERS };
 
+export async function signInWithPassword(email: string, password: string): Promise<string | null> {
+  const result = await authClient.signIn.email({ email, password, callbackURL: "/" });
+  if (result.error) return result.error.message ?? "Sign-in failed";
+  return null;
+}
+
 // ── Live-preview bearer token ────────────────────────────────────────────────
 // The embedded preview iframe has partitioned cookies, so we keep the session's
 // bearer token in sessionStorage and attach it to every Better Auth request (and

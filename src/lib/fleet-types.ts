@@ -157,6 +157,16 @@ export const DEFAULT_SETTINGS: OrgSettings = {
   idleWarnMin: 15,
 };
 
+export const EMPTY_FLEET_SNAPSHOT: FleetSnapshot = {
+  vehicles: [],
+  drivers: [],
+  alerts: [],
+  jobs: [],
+  fuel: [],
+  geofences: [],
+  settings: { ...DEFAULT_SETTINGS },
+};
+
 export const ALERT_KIND_LABELS: Record<AlertKind, string> = {
   speeding: "Speeding",
   geofence: "Geofence",

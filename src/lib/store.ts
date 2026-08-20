@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { uid } from "./utils";
 import { createSeedData, DEMO_NOW } from "./seed";
 import type {
@@ -25,6 +24,7 @@ type LaneState = {
   includeCompleted: boolean;
   composer: ComposerState;
   hydrated: boolean;
+  loadError: string | null;
   seededAt: number;
   selectRo: (id: string | null) => void;
   setQuery: (q: string) => void;
@@ -37,12 +37,18 @@ type LaneState = {
   addRo: (ro: RepairOrder) => void;
   setFollowUpOutcome: (id: string, outcome: FollowUpOutcome) => void;
   addFollowUp: (fu: FollowUp) => void;
+  replaceFollowUps: (followUps: FollowUp[]) => void;
   addScratch: (text: string, now: number) => void;
+  addScratchNote: (note: ScratchNote) => void;
   removeScratch: (id: string) => void;
   setSettings: (patch: Partial<AppSettings>) => void;
-  markHydrated: () => void;
   resetDemo: (now?: number) => void;
+  hydrate: (snapshot: LaneSnapshot, persist: boolean) => void;
+  setLoadError: (message: string | null) => void;
+  persist: boolean;
 };
+
+export type LaneSnapshot = Pick<LaneState, "ros" | "followUps" | "scratch" | "settings" | "seededAt">;
 
 function seedAll(now = DEMO_NOW): Pick<LaneState, "ros" | "followUps" | "scratch" | "settings" | "seededAt"> {
   return {
@@ -59,8 +65,7 @@ function seedAll(now = DEMO_NOW): Pick<LaneState, "ros" | "followUps" | "scratch
 }
 
 export const useAppStore = create<LaneState>()(
-  persist(
-    (set, get) => ({
+  (set, get) => ({
       ...seedAll(),
       selectedId: null,
       query: "",
@@ -68,6 +73,8 @@ export const useAppStore = create<LaneState>()(
       includeCompleted: false,
       composer: null,
       hydrated: false,
+      loadError: null,
+      persist: false,
       selectRo: (id) => set({ selectedId: id }),
       setQuery: (query) => set({ query }),
       setBoardFilter: (boardFilter) => set({ boardFilter }),
@@ -114,33 +121,17 @@ export const useAppStore = create<LaneState>()(
           followUps: get().followUps.map((f) => (f.id === id ? { ...f, outcome } : f)),
         }),
       addFollowUp: (fu) => set({ followUps: [fu, ...get().followUps] }),
+      replaceFollowUps: (followUps) => set({ followUps }),
       addScratch: (text, now) => {
         const t = text.trim();
         if (!t) return;
         set({ scratch: [{ id: uid("sc"), text: t, createdAt: new Date(now).toISOString() }, ...get().scratch] });
       },
+      addScratchNote: (note) => set({ scratch: [note, ...get().scratch] }),
       removeScratch: (id) => set({ scratch: get().scratch.filter((s) => s.id !== id) }),
       setSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
-      markHydrated: () => {
-        const s = get();
-        if (s.seededAt === DEMO_NOW || s.ros.length === 0) {
-          set({ ...seedAll(Date.now()), hydrated: true, selectedId: s.selectedId });
-        } else {
-          set({ hydrated: true });
-        }
-      },
       resetDemo: (now = Date.now()) => set({ ...seedAll(now), selectedId: null, query: "", boardFilter: "all" }),
-    }),
-    {
-      name: "sacc-lane-v2",
-      skipHydration: true,
-      partialize: (s) => ({
-        ros: s.ros,
-        followUps: s.followUps,
-        scratch: s.scratch,
-        settings: s.settings,
-        seededAt: s.seededAt,
-      }),
-    },
-  ),
+      hydrate: (snapshot, persist) => set({ ...snapshot, hydrated: true, persist, loadError: null, selectedId: null, query: "", boardFilter: "all" }),
+      setLoadError: (loadError) => set({ loadError }),
+  }),
 );

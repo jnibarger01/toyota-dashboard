@@ -9,6 +9,9 @@ import { computeKpis } from "@/lib/kpis";
 import { deriveFollowUps } from "@/lib/follow-ups";
 import { useNow } from "@/components/now";
 import { vehicleLabel } from "@/lib/format";
+import { TodayNow } from "@/components/today-now";
+import { AdvisorCopilot } from "@/components/advisor-copilot";
+import { MorningBriefing } from "@/components/morning-briefing";
 
 export const Route = createFileRoute("/_app/")({ component: Dashboard });
 
@@ -22,6 +25,7 @@ function Dashboard() {
   const queue = deriveFollowUps(ros, followUps, settings, now).slice(0, 4);
   const rows = useVisibleRos();
   const hydrated = useAppStore((s) => s.hydrated);
+  const loadError = useAppStore((s) => s.loadError);
 
   return (
     <div className="space-y-4">
@@ -39,9 +43,15 @@ function Dashboard() {
         </Link>
       </div>
 
-      <SummaryCards kpis={kpis} />
+      {loadError ? <div role="alert" className="rounded-lg border border-accent/40 bg-accent-soft px-3 py-2 text-sm text-accent">{loadError}</div> : null}
 
-      <QuickIntake />
+      <AdvisorCopilot />
+      <TodayNow />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SummaryCards kpis={kpis} />
+        <QuickIntake />
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-3 min-w-0">
@@ -52,6 +62,7 @@ function Dashboard() {
           ) : null}
         </div>
         <aside className="space-y-3">
+          <MorningBriefing />
           <section className="rounded-xl bg-elevated p-4 shadow-[var(--shadow-border)]">
             <div className="flex items-baseline justify-between">
               <h2 className="text-sm font-medium">Needs contact</h2>

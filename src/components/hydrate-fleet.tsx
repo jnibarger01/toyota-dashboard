@@ -3,6 +3,7 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { loadFleet, saveFleet } from "@/lib/fleet-server";
 import { createSeedData } from "@/lib/fleet-seed";
 import { snapshotFromStore, useFleetStore } from "@/lib/fleet-store";
+import { EMPTY_FLEET_SNAPSHOT } from "@/lib/fleet-types";
 import { useNow } from "./now";
 
 export function HydrateFleet() {
@@ -28,7 +29,8 @@ export function HydrateFleet() {
           if (!cancelled) hydrate(snap, true);
           return;
         } catch {
-          // Signed-in load can fail on first preview boot — fall through to local seed.
+          if (!cancelled) hydrate(EMPTY_FLEET_SNAPSHOT, false);
+          return;
         }
       }
       if (!cancelled) hydrate(createSeedData(), false);
