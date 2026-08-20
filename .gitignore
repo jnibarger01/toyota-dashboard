@@ -9,3 +9,4 @@ dist/
 .tanstack-*
 .DS_Store
 screenshots/
+gh-pages/

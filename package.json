@@ -11,6 +11,7 @@
     "build": "vite build && npm run db:migrate",
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "vite build --mode development",
+    "build:pages": "vite build --config vite.pages.config.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --test 'scripts/**/*.test.mjs'",
