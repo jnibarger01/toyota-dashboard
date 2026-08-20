@@ -3,14 +3,18 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useNow } from "@/components/now";
 import { useAppStore } from "@/lib/store";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { createManualRepairOrder } from "@/lib/ro-server";
+import { projectRepairOrder } from "@/lib/ro-projection";
 import { TECHNICIANS, TRANSPORT_LABELS, TRANSPORT_TYPES, type TransportType } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { useState, type FormEvent } from "react";
 
 export function QuickIntake() {
   const addRo = useAppStore((s) => s.addRo);
-  const advisor = useAppStore((s) => s.settings.advisorName);
+  const settings = useAppStore((s) => s.settings);
   const now = useNow();
+  const { user } = useCurrentUserState();
   const [open, setOpen] = useState(false);
   const [roNumber, setRoNumber] = useState("");
   const [customer, setCustomer] = useState("");
@@ -19,44 +23,57 @@ export function QuickIntake() {
   const [concern, setConcern] = useState("");
   const [tech, setTech] = useState<(typeof TECHNICIANS)[number]>("Unassigned");
   const [transport, setTransport] = useState<TransportType>("waiting");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     if (!roNumber.trim() || !customer.trim() || !vehicle.trim()) return;
-    const id = uid("ro");
+    setBusy(true); setError(null);
+    const id = crypto.randomUUID();
     const at = new Date(now).toISOString();
-    addRo({
-      id,
-      roNumber: roNumber.trim(),
-      customerName: customer.trim(),
-      customerPhone: "",
-      vehicle: vehicle.trim(),
-      year: Number(year) || new Date().getFullYear(),
-      mileage: 0,
-      vin: "",
-      technician: tech,
-      advisor,
-      appointmentTime: at,
-      status: "checked_in",
-      statusChangedAt: at,
-      concern: concern.trim(),
-      diagnosis: "",
-      lines: [],
-      contactPref: "call",
-      lastCustomerUpdate: null,
-      nextUpdateDue: new Date(now + 25 * 60_000).toISOString(),
-      notes: "",
-      transportation: transport,
-      promiseTime: new Date(now + 120 * 60_000).toISOString(),
-      timeline: [{ id: uid("ev"), at, label: "Customer checked in", kind: "intake" }],
-      createdAt: at,
-      techNotes: "",
-    });
+    const promiseTime = new Date(now + 120 * 60_000).toISOString();
+    const updateIntervalMinutes = transport === "waiting" ? settings.waitingUpdateIntervalMin : settings.updateIntervalMin;
+    if (user) {
+      try {
+        const created = await createManualRepairOrder({ data: { id, roNumber: roNumber.trim(), customerName: customer.trim(), year: Number(year) || undefined, model: vehicle.trim(), technicianName: tech === "Unassigned" ? undefined : tech, transportation: transport, waitingCustomer: transport === "waiting", promiseAt: promiseTime, updateIntervalMinutes, concern: concern.trim() || undefined } });
+        addRo(projectRepairOrder(created, []));
+      } catch { setError("Could not create the RO on the server. Nothing was added."); setBusy(false); return; }
+    } else {
+      addRo({
+        id,
+        roNumber: roNumber.trim(),
+        customerName: customer.trim(),
+        customerPhone: "",
+        vehicle: vehicle.trim(),
+        year: Number(year) || new Date().getFullYear(),
+        mileage: 0,
+        vin: "",
+        technician: tech,
+        advisor: settings.advisorName,
+        appointmentTime: at,
+        status: "checked_in",
+        statusChangedAt: at,
+        concern: concern.trim(),
+        diagnosis: "",
+        lines: [],
+        contactPref: "call",
+        lastCustomerUpdate: null,
+        nextUpdateDue: new Date(now + updateIntervalMinutes * 60_000).toISOString(),
+        notes: "",
+        transportation: transport,
+        promiseTime,
+        timeline: [{ id: uid("ev"), at, label: "Customer checked in", kind: "intake" }],
+        createdAt: at,
+        techNotes: "",
+      });
+    }
     setRoNumber("");
     setCustomer("");
     setVehicle("");
     setConcern("");
     setOpen(false);
+    setBusy(false);
   }
 
   if (!open) {
@@ -94,13 +111,14 @@ export function QuickIntake() {
       </div>
       <Input className="mt-2" value={concern} onChange={(e) => setConcern(e.target.value)} placeholder="Concern" />
       <div className="mt-2 flex gap-2">
-        <Button type="submit" size="sm">
-          Add to lane
+        <Button type="submit" size="sm" disabled={busy}>
+          {busy ? "Adding…" : "Add to lane"}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
           Cancel
         </Button>
       </div>
+      {error ? <p className="mt-2 text-xs text-accent">{error}</p> : null}
     </form>
   );
 }

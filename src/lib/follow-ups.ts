@@ -18,6 +18,13 @@ const REASON_RANK: Record<FollowUp["reason"], number> = {
   update_overdue: 4,
   declined: 5,
   manual: 6,
+  deferred_maintenance: 6,
+  post_service: 6,
+  unsold_recommendation: 6,
+  appointment_needed: 6,
+  parts_arrival: 3,
+  customer_callback: 4,
+  internal_follow_up: 6,
 };
 
 export function deriveFollowUps(
@@ -26,8 +33,10 @@ export function deriveFollowUps(
   settings: AppSettings,
   now: number,
 ): DerivedFollowUp[] {
+  // Any non-open outcome has been handled for the active queue. Historical
+  // outcome views can still surface it without repeatedly paging the advisor.
   const dismissed = new Set(
-    followUps.filter((f) => f.outcome === "completed" || f.outcome === "later").map((f) => `${f.roId}:${f.reason}`),
+    followUps.filter((f) => f.outcome !== "open").map((f) => `${f.roId}:${f.reason}`),
   );
   const out: DerivedFollowUp[] = [];
 
@@ -72,7 +81,7 @@ export function deriveFollowUps(
 
   for (const f of followUps) {
     if (f.outcome !== "open" && f.outcome !== "later") continue;
-    if (f.reason !== "manual") continue;
+    if (!f.createdManually && f.reason !== "manual") continue;
     const ro = ros.find((r) => r.id === f.roId);
     if (!ro) continue;
     out.push({

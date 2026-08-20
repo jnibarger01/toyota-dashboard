@@ -33,6 +33,7 @@ jobs:
       - name: Build static site
         env:
           VITE_AUTH_ENABLED: "false"
+          VITE_DEPLOY_TARGET: pages
         run: npm run build:pages
 
       - name: Prepare static output

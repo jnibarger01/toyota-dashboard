@@ -1,8 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { createSeedData } from "@/lib/fleet-seed";
-import type { FleetSnapshot } from "@/lib/fleet-types";
+import { EMPTY_FLEET_SNAPSHOT, type FleetSnapshot } from "@/lib/fleet-types";
 
 function asSnap(row: { payload: unknown } | undefined): FleetSnapshot | null {
   if (!row) return null;
@@ -27,12 +26,7 @@ export const loadFleet = createServerFn({ method: "GET" })
     );
     const existing = asSnap(rows[0]);
     if (existing) return existing;
-    const seed = createSeedData();
-    await sql.query(
-      "insert into fleet_orgs (user_id, payload) values ($1, $2::jsonb)",
-      [context.userId, JSON.stringify(seed)],
-    );
-    return seed;
+    return EMPTY_FLEET_SNAPSHOT;
   });
 
 export const saveFleet = createServerFn({ method: "POST" })

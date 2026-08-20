@@ -10,11 +10,11 @@ import { RoInspector } from "@/components/ro-inspector";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
 import { format } from "date-fns";
+import { useEffect } from "react";
 import {
   ClipboardList,
   Gauge,
   LayoutDashboard,
-  MapPinned,
   NotebookPen,
   PhoneCall,
   Settings,
@@ -24,13 +24,20 @@ import { computeKpis } from "@/lib/kpis";
 import { useAppStore } from "@/lib/store";
 
 const NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/ros", label: "ROs", icon: ClipboardList },
+  { to: "/", label: "Today", icon: LayoutDashboard },
+  { to: "/ros", label: "Lane", icon: ClipboardList },
   { to: "/follow-ups", label: "Follow-Ups", icon: PhoneCall },
   { to: "/notes", label: "Notes", icon: NotebookPen },
   { to: "/performance", label: "Performance", icon: Gauge },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
+
+const DARK_TOKENS: Record<string, string> = {
+  "--color-bg": "#171613", "--color-surface": "#1e1c18", "--color-elevated": "#27241f", "--color-ink": "#f3efe8", "--color-fg": "#f3efe8",
+  "--color-muted": "#b8b0a5", "--color-subtle": "#91897f", "--color-border": "#403c35", "--color-border-strong": "#575148",
+  "--color-accent": "#ff7c70", "--color-accent-fg": "#24110f", "--color-accent-soft": "#4a2520", "--color-warn": "#f2b54f", "--color-warn-soft": "#493816",
+  "--color-ok": "#7fc58d", "--color-ok-soft": "#1f4329", "--color-info": "#9bbbd6", "--color-info-soft": "#233b4d",
+};
 
 function LaneClock() {
   const now = useNow();
@@ -63,6 +70,14 @@ function ShellInner() {
   const queue = deriveFollowUps(ros, followUps, settings, now);
   const attention = kpis.updatesDue + kpis.waitingCustomer + kpis.ready;
   const onFleet = pathname.startsWith("/fleet");
+  useEffect(() => {
+    const dark = settings.appearance === "dark" || (settings.appearance === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    for (const [token, value] of Object.entries(DARK_TOKENS)) {
+      if (dark) document.documentElement.style.setProperty(token, value);
+      else document.documentElement.style.removeProperty(token);
+    }
+  }, [settings.appearance]);
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
@@ -100,16 +115,6 @@ function ShellInner() {
                 </Link>
               );
             })}
-            <Link
-              to="/fleet"
-              className={cn(
-                "relative flex h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors duration-150",
-                onFleet ? "bg-ink/6 text-ink" : "text-muted hover:bg-ink/4 hover:text-ink",
-              )}
-            >
-              <MapPinned className="size-3.5" />
-              Fleet
-            </Link>
           </nav>
           <div className="ml-auto flex items-center gap-3">
             <LaneClock />
@@ -126,7 +131,7 @@ function ShellInner() {
                 <div className="text-xs text-muted">Signed in</div>
               </SignedIn>
               <SignedOut>
-                <div className="text-xs text-muted">Local lane</div>
+                <div className="text-xs text-muted">Demo mode · fictional data</div>
               </SignedOut>
             </div>
             <AuthSlot />

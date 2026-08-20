@@ -358,10 +358,18 @@ function insertBeforeHeadClose(html, snippet) {
 
 export function normalizeHeadContext(ctx = {}) {
   const cwd = ctx.cwd ?? process.cwd();
-  const site = ctx.site !== undefined ? ctx.site : snapshotOgIdentity(cwd).site;
-  const appName = resolveOgTitle(site, ctx.appName ?? DEFAULT_APP_NAME, ctx.host ?? "");
+  // Runtime callers must pass their baked identity. Keeping the pure injector
+  // independent from the current workspace makes document/host-derived names
+  // deterministic and prevents one application's site.json from leaking into
+  // another invocation (including tests and multi-app tooling).
+  const site = ctx.site ?? {};
   return {
-    appName,
+    // Keep the configured application name separate from the resolved display
+    // name. The final title also depends on the document title and request host,
+    // neither of which is available when a streaming injector is constructed.
+    // Resolving here made one workspace's site.json title override every
+    // document, including independently tested/published application identities.
+    appName: ctx.appName ?? DEFAULT_APP_NAME,
     projectId: ctx.projectId ?? readGrokProjectId(),
     creator: ctx.creator ?? readXCreator(),
     creatorId: ctx.creatorId ?? readXCreatorId(),

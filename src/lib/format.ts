@@ -1,5 +1,5 @@
 import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
-import type { RepairOrder } from "./types";
+import type { RepairOrder } from "./types.ts";
 
 export function vehicleLabel(ro: RepairOrder): string {
   return `${ro.year} ${ro.vehicle}`;

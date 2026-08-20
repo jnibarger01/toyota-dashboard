@@ -6,8 +6,9 @@
  * in ../migrations to DATABASE_URL. Each file is applied in one transaction and
  * recorded in a `_migrations` table, so it runs once and is safe to re-run.
  *
- * No DATABASE_URL (local / preview builds) -> skip; the PGLite fallback applies
- * the same files at startup instead (see src/lib/db.ts).
+ * No DATABASE_URL is tolerated only for an explicitly local build. Vercel and
+ * production-mode builds fail closed instead of producing a deploy that cannot
+ * reach its persistent database.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -16,8 +17,14 @@ import pg from "pg";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
+  const isStaticDemo = process.env.VITE_DEPLOY_TARGET === "pages";
+  const isProductionBuild = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
+  if (isProductionBuild && !isStaticDemo) {
+    console.error("[migrate] DATABASE_URL is required for a production deployment — refusing to continue.");
+    process.exit(1);
+  }
   console.log(
-    "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",
+    "[migrate] DATABASE_URL not set — local build only; skipping managed-Postgres migrations.",
   );
   process.exit(0);
 }

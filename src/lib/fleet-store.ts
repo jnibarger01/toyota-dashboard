@@ -11,6 +11,9 @@ import type {
   Vehicle,
   VehicleFilter,
 } from "./fleet-types";
+import { EMPTY_FLEET_SNAPSHOT } from "./fleet-types";
+
+const IS_STATIC_DEMO = import.meta.env.VITE_DEPLOY_TARGET === "pages" || import.meta.env.VITE_AUTH_ENABLED === "false";
 
 type FleetState = FleetSnapshot & {
   hydrated: boolean;
@@ -65,8 +68,8 @@ function advance(v: Vehicle, dtSec: number, nowIso: string): Vehicle {
 }
 
 export const useFleetStore = create<FleetState>((set, get) => ({
-  ...createSeedData(),
-  hydrated: true,
+  ...(IS_STATIC_DEMO ? createSeedData() : EMPTY_FLEET_SNAPSHOT),
+  hydrated: false,
   selectedId: null,
   vehicleQuery: "",
   vehicleFilter: "all",

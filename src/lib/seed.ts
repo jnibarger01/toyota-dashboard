@@ -19,7 +19,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
   const advisor = "Service Advisor";
   return [
     {
-      id: "ro-45281",
+      id: "00000000-0000-4000-8000-000000045281",
       roNumber: "45281",
       customerName: "Elena Martinez",
       customerPhone: "8165550142",
@@ -57,7 +57,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45282",
+      id: "00000000-0000-4000-8000-000000045282",
       roNumber: "45282",
       customerName: "David Chen",
       customerPhone: "9135550188",
@@ -92,7 +92,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45283",
+      id: "00000000-0000-4000-8000-000000045283",
       roNumber: "45283",
       customerName: "Marcus Webb",
       customerPhone: "8165550110",
@@ -122,7 +122,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45284",
+      id: "00000000-0000-4000-8000-000000045284",
       roNumber: "45284",
       customerName: "Priya Nair",
       customerPhone: "9135550162",
@@ -152,7 +152,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45285",
+      id: "00000000-0000-4000-8000-000000045285",
       roNumber: "45285",
       customerName: "Helen Brooks",
       customerPhone: "8165550194",
@@ -188,7 +188,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45286",
+      id: "00000000-0000-4000-8000-000000045286",
       roNumber: "45286",
       customerName: "James Okafor",
       customerPhone: "9135550127",
@@ -224,7 +224,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45287",
+      id: "00000000-0000-4000-8000-000000045287",
       roNumber: "45287",
       customerName: "Sofia Alvarez",
       customerPhone: "8165550155",
@@ -257,7 +257,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45288",
+      id: "00000000-0000-4000-8000-000000045288",
       roNumber: "45288",
       customerName: "Owen Blake",
       customerPhone: "9135550103",
@@ -284,7 +284,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       timeline: [ev("t1", -12, now, "Checked in — waiting", "intake")],
     },
     {
-      id: "ro-45289",
+      id: "00000000-0000-4000-8000-000000045289",
       roNumber: "45289",
       customerName: "Nina Patel",
       customerPhone: "8165550177",
@@ -314,7 +314,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45290",
+      id: "00000000-0000-4000-8000-000000045290",
       roNumber: "45290",
       customerName: "Chris Nguyen",
       customerPhone: "9135550199",
@@ -348,7 +348,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45291",
+      id: "00000000-0000-4000-8000-000000045291",
       roNumber: "45291",
       customerName: "Ruth Klein",
       customerPhone: "8165550131",
@@ -382,7 +382,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45292",
+      id: "00000000-0000-4000-8000-000000045292",
       roNumber: "45292",
       customerName: "Andre Lewis",
       customerPhone: "9135550148",
@@ -415,7 +415,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45270",
+      id: "00000000-0000-4000-8000-000000045270",
       roNumber: "45270",
       customerName: "Maya Ortiz",
       customerPhone: "8165550108",
@@ -445,7 +445,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45271",
+      id: "00000000-0000-4000-8000-000000045271",
       roNumber: "45271",
       customerName: "Cole Brennan",
       customerPhone: "9135550150",
@@ -475,7 +475,7 @@ export function createSeedData(now = DEMO_NOW): RepairOrder[] {
       ],
     },
     {
-      id: "ro-45272",
+      id: "00000000-0000-4000-8000-000000045272",
       roNumber: "45272",
       customerName: "Elena Cho",
       customerPhone: "8165550122",

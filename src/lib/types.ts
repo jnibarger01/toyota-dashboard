@@ -84,7 +84,14 @@ export type FollowUpReason =
   | "diagnosis_done"
   | "ready"
   | "declined"
-  | "manual";
+  | "manual"
+  | "deferred_maintenance"
+  | "post_service"
+  | "unsold_recommendation"
+  | "appointment_needed"
+  | "parts_arrival"
+  | "customer_callback"
+  | "internal_follow_up";
 
 export type FollowUp = {
   id: string;
@@ -95,6 +102,8 @@ export type FollowUp = {
   callbackAt: string | null;
   createdAt: string;
   note: string;
+  estimatedOpportunity: number;
+  createdManually?: boolean;
 };
 
 export type ScratchNote = {
@@ -129,6 +138,10 @@ export type RepairOrder = {
   timeline: TimelineEvent[];
   createdAt: string;
   techNotes: string;
+  carryover?: boolean;
+  comeback?: boolean;
+  /** Open blocker types from the authoritative RO record. */
+  blockers?: string[];
 };
 
 export type AppSettings = {
@@ -136,9 +149,18 @@ export type AppSettings = {
   storeName: string;
   updateIntervalMin: number;
   waitingUpdateIntervalMin: number;
+  approvalDelayWarningMin: number;
+  promiseRiskWarningMin: number;
+  defaultTransportation: TransportType;
+  aiDefaultTone: "concise" | "warm";
+  aiEnabledModes: AiDraftingMode[];
+  appearance: "system" | "light" | "dark";
   stallMinutes: Partial<Record<RoStatus, number>>;
   highDollarThreshold: number;
 };
+
+export const AI_DRAFTING_MODES = ["update_technical", "update_simple", "update_text", "update_phone", "update_recommend", "update_declined", "note_ro", "note_customer", "note_internal", "concern"] as const;
+export type AiDraftingMode = (typeof AI_DRAFTING_MODES)[number];
 
 export type BoardFilter =
   | "all"
@@ -146,9 +168,16 @@ export type BoardFilter =
   | "updates_overdue"
   | "approval_pending"
   | "parts_pending"
+  | "blockers"
   | "ready"
   | "high_dollar"
-  | "stalled";
+  | "stalled"
+  | "promise_risk"
+  | "declined_work"
+  | "waiting_technician"
+  | "carryovers"
+  | "comebacks"
+  | "delivered";
 
 export const TECHNICIANS = [
   "Diego Ruiz",
@@ -164,6 +193,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   storeName: "Service Drive",
   updateIntervalMin: 90,
   waitingUpdateIntervalMin: 25,
+  approvalDelayWarningMin: 25,
+  promiseRiskWarningMin: 30,
+  defaultTransportation: "dropoff",
+  aiDefaultTone: "concise",
+  aiEnabledModes: [...AI_DRAFTING_MODES],
+  appearance: "system",
   highDollarThreshold: 1500,
   stallMinutes: {
     checked_in: 20,

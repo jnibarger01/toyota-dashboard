@@ -11,10 +11,11 @@
     "build": "vite build && npm run db:migrate",
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "vite build --mode development",
-    "build:pages": "vite build --config vite.pages.config.ts",
+    "build:pages": "VITE_AUTH_ENABLED=false VITE_DEPLOY_TARGET=pages vite build --config vite.pages.config.ts",
+    "seed:user": "node scripts/seed-user.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test 'scripts/**/*.test.mjs'",
+    "test": "node --experimental-strip-types --test 'scripts/**/*.test.{mjs,ts}'",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

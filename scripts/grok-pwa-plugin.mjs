@@ -84,7 +84,7 @@ function serveGrokPwa(middlewares) {
  * content-encoded: under `vite preview` the compression middleware can hand
  * this wrapper gzipped bytes, which must pass through untouched.
  */
-function wrapHtmlResponses(middlewares) {
+function wrapHtmlResponses(middlewares, site) {
   middlewares.use((req, res, next) => {
     const rawUrl = req.url ?? "";
     const pathOnly = rawUrl.split("?", 1)[0] ?? "";
@@ -104,6 +104,7 @@ function wrapHtmlResponses(middlewares) {
     const host = requestHost(req);
     const injector = createHeadInjector({
       host,
+      site,
     });
     let mode = null; // null = undecided, "inject" | "passthrough"
 
@@ -151,6 +152,9 @@ function wrapHtmlResponses(middlewares) {
 }
 
 export function grokPwaPlugin() {
+  // Snapshot once per Vite process so development uses the same explicit
+  // identity contract as the production virtual module.
+  const identity = snapshotOgIdentity();
   return {
     name: "app-builder:grok-pwa",
     resolveId(id) {
@@ -158,18 +162,19 @@ export function grokPwaPlugin() {
     },
     load(id) {
       if (id !== `\0${GROK_OG_IDENTITY_ID}`) return;
-      return `export const grokOgIdentity = ${JSON.stringify(snapshotOgIdentity())};`;
+      return `export const grokOgIdentity = ${JSON.stringify(identity)};`;
     },
     transformIndexHtml(html) {
       return injectGrokPwaHead(html, {
         host: process.env.VITE_PUBLIC_HOSTNAME ?? "",
+        site: identity.site,
       });
     },
     configureServer(server) {
       // Registered directly (not in a returned post-hook) so both run BEFORE
       // TanStack Start's SSR middleware, like the auth-popup plugin.
       serveGrokPwa(server.middlewares);
-      wrapHtmlResponses(server.middlewares);
+      wrapHtmlResponses(server.middlewares, identity.site);
     },
     configurePreviewServer(server) {
       serveGrokPwa(server.middlewares);
@@ -177,7 +182,7 @@ export function grokPwaPlugin() {
       // the post-hooks, and the injector must wrap AFTER compression so it
       // sees plaintext HTML (compression then compresses the injected output).
       return () => {
-        wrapHtmlResponses(server.middlewares);
+        wrapHtmlResponses(server.middlewares, identity.site);
       };
     },
   };
