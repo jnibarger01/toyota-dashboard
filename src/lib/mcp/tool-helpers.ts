@@ -6,8 +6,15 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
  * is somehow invoked without it — should be unreachable since `auth.ts`
  * verifies the token before the server/transport are even constructed.
  */
-export function requireUserId(extra: { authInfo?: { extra?: Record<string, unknown> } }): string {
-  const userId = extra.authInfo?.extra?.userId;
+type ToolContext = { authInfo?: { scopes?: string[]; extra?: Record<string, unknown> }; http?: { authInfo?: { scopes?: string[]; extra?: Record<string, unknown> } } };
+
+function authInfo(extra: unknown): ToolContext["authInfo"] {
+  const context = (extra ?? {}) as ToolContext;
+  return context.authInfo ?? context.http?.authInfo;
+}
+
+export function requireUserId(extra: unknown): string {
+  const userId = authInfo(extra)?.extra?.userId;
   if (typeof userId !== "string" || !userId) {
     throw new Error("MCP tool invoked without a resolved user context");
   }
@@ -50,10 +57,10 @@ export function clampLimit(value: number | undefined, def: number, max: number):
  * `src/routes/api/mcp.ts` alongside `userId`. Throws under the same
  * "should be unreachable" reasoning as `requireUserId`.
  */
-export function requireWriteContext(extra: { authInfo?: { extra?: Record<string, unknown> } }): { userId: string; tokenId: string; requestId: string } {
+export function requireWriteContext(extra: unknown): { userId: string; tokenId: string; requestId: string } {
   const userId = requireUserId(extra);
-  const tokenId = extra.authInfo?.extra?.tokenId;
-  const requestId = extra.authInfo?.extra?.requestId;
+  const tokenId = authInfo(extra)?.extra?.tokenId;
+  const requestId = authInfo(extra)?.extra?.requestId;
   if (typeof tokenId !== "string" || !tokenId) throw new Error("MCP tool invoked without a resolved token id");
   if (typeof requestId !== "string" || !requestId) throw new Error("MCP tool invoked without a request id");
   return { userId, tokenId, requestId };
@@ -66,8 +73,8 @@ export function requireWriteContext(extra: { authInfo?: { extra?: Record<string,
  * not in `auth.ts` (connection time) — different tools need different
  * scopes, and a token may legitimately hold only some of them.
  */
-export function checkScope(extra: { authInfo?: { scopes?: string[] } }, required: string): CallToolResult | null {
-  const scopes = extra.authInfo?.scopes ?? [];
+export function checkScope(extra: unknown, required: string): CallToolResult | null {
+  const scopes = authInfo(extra)?.scopes ?? [];
   if (scopes.includes(required)) return null;
   return errorResult(`Missing required scope: ${required}`);
 }

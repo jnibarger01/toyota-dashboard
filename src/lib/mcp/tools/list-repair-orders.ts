@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { RepairOrderRepository } from "@/lib/ro-repository.server";
 import { WORKFLOW_STATES } from "@/lib/ro-domain";
 import { summarizeRepairOrder } from "../shape";
