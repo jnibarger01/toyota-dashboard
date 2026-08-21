@@ -13,17 +13,17 @@ export const writeShiftBriefing = createServerFn({ method: "POST" })
     summary: (input.summary ?? "").slice(0, 4000),
   }))
   .handler(async ({ data }) => {
-    const apiKey = process.env.XAI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return { ok: false as const, error: "AI is not available in this environment" };
 
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-4.5",
+        model: "gpt-4.1-mini",
         max_tokens: 420,
         messages: [
           {
@@ -38,7 +38,7 @@ export const writeShiftBriefing = createServerFn({ method: "POST" })
         ],
       }),
     });
-    if (!res.ok) return { ok: false as const, error: `xAI API error ${res.status}` };
+    if (!res.ok) return { ok: false as const, error: `OpenAI API error ${res.status}` };
     const body = (await res.json()) as { choices: { message: { content: string } }[] };
     return { ok: true as const, text: body.choices[0]?.message.content ?? "" };
   });
