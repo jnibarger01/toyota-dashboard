@@ -38,6 +38,7 @@ import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { ensureDbReady, getPglite } from "../db";
+import { assertProductionConfiguration } from "../runtime-policy";
 import { emailAndPasswordEnabled } from "./email-password";
 import { pgliteDialect } from "./pglite-dialect";
 import { PREVIEW_ALLOWED_HOSTS } from "./preview";
@@ -80,6 +81,17 @@ export const authConfigured = !authDisabled;
 // preview allowlist, which makes the OAuth `redirect_uri` the concrete preview URL
 // the broker's preview client accepts.
 const explicitBaseURL = env("BETTER_AUTH_URL");
+const databaseUrl = env("DATABASE_URL");
+const isStaticDemo = process.env.VITE_DEPLOY_TARGET === "pages" && !databaseUrl;
+const isProductionServer = typeof window === "undefined" && (import.meta.env?.PROD ?? false);
+assertProductionConfiguration({
+  production: isProductionServer,
+  staticDemo: isStaticDemo,
+  databaseUrl,
+  authEnabled: !authDisabled,
+  authSecret: env("BETTER_AUTH_SECRET"),
+  authUrl: explicitBaseURL,
+});
 export const authBaseURL = explicitBaseURL ?? "http://localhost:8080";
 export const authIssuerURL = `${authBaseURL.replace(/\/$/, "")}/api/auth`;
 export const mcpResourceURL = env("MCP_RESOURCE_URL") ?? `${authBaseURL.replace(/\/$/, "")}/api/mcp`;
@@ -115,8 +127,6 @@ const trustedOrigins: string[] = explicitBaseURL
       ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
       ...LOCAL_DEV_ORIGINS,
     ];
-
-const databaseUrl = env("DATABASE_URL");
 
 // Real Postgres when `DATABASE_URL` is set (deployed apps), else the app's
 // embedded PGLite (preview) via a Kysely dialect — so Better Auth persists to the
