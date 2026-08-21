@@ -9,6 +9,10 @@ const rawDatabaseUrl =
   typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
 const databaseUrl =
   rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
+const authSecret =
+  typeof process !== "undefined" ? process.env.BETTER_AUTH_SECRET : undefined;
+const authUrl =
+  typeof process !== "undefined" ? process.env.BETTER_AUTH_URL : undefined;
 
 /**
  * Active backend: real **Neon** when `DATABASE_URL` is set (deployed / configured
@@ -29,6 +33,8 @@ assertProductionConfiguration({
   staticDemo: isStaticDemo,
   databaseUrl,
   authEnabled: process.env.VITE_AUTH_ENABLED !== "false",
+  authSecret,
+  authUrl,
 });
 
 /**
