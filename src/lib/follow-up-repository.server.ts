@@ -24,6 +24,11 @@ export class FollowUpRepository {
     return rows.map(mapRow);
   }
 
+  async getById(userId: string, id: string): Promise<FollowUp | null> {
+    const rows = await this.sql.query<FollowUpRow>("select id, ro_id, reason, label, outcome, due_at, estimated_opportunity, note, created_manually, created_at from service_follow_ups where id = $1 and user_id = $2", [id, userId]);
+    return rows[0] ? mapRow(rows[0]) : null;
+  }
+
   /** Imports only valid legacy records once, after their RO ownership exists. */
   async importIfEmpty(userId: string, legacy: FollowUp[]): Promise<void> {
     const [{ count }] = await this.sql.query<{ count: number }>("select count(*)::int as count from service_follow_ups where user_id = $1", [userId]);
@@ -38,22 +43,22 @@ export class FollowUpRepository {
     }
   }
 
-  async create(input: { id?: string; userId: string; roId: string; reason: FollowUpReason; label: string; outcome?: FollowUpOutcome; callbackAt?: string | null; estimatedOpportunity?: number; note?: string; createdManually?: boolean }): Promise<FollowUp> {
+  async create(input: { id?: string; userId: string; roId: string; reason: FollowUpReason; label: string; outcome?: FollowUpOutcome; callbackAt?: string | null; estimatedOpportunity?: number; note?: string; createdManually?: boolean; source?: string }): Promise<FollowUp> {
     const id = input.id ?? crypto.randomUUID();
     const exists = await this.sql.query<{ id: string }>("select id from repair_orders where id = $1 and user_id = $2", [input.roId, input.userId]);
     if (!exists[0]) throw new Error("Repair order not found");
     const rows = await this.sql.query<FollowUpRow>("insert into service_follow_ups (id, user_id, ro_id, reason, label, outcome, due_at, estimated_opportunity, note, created_manually) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id, ro_id, reason, label, outcome, due_at, estimated_opportunity, note, created_manually, created_at", [id, input.userId, input.roId, input.reason, input.label, input.outcome ?? "open", input.callbackAt ?? null, input.estimatedOpportunity ?? 0, input.note ?? "", input.createdManually ?? false]);
     if (!rows[0]) throw new Error("Follow-up could not be created");
-    await this.recordEvent(input.roId, input.userId, "follow_up_created", null, { id, reason: input.reason, label: input.label });
+    await this.recordEvent(input.roId, input.userId, "follow_up_created", input.source ?? "manual", null, { id, reason: input.reason, label: input.label });
     return mapRow(rows[0]);
   }
 
-  async setOutcome(userId: string, id: string, outcome: FollowUpOutcome): Promise<FollowUp> {
+  async setOutcome(userId: string, id: string, outcome: FollowUpOutcome, source?: string): Promise<FollowUp> {
     const before = await this.sql.query<{ ro_id: string; outcome: FollowUpOutcome; label: string }>("select ro_id, outcome, label from service_follow_ups where id = $1 and user_id = $2", [id, userId]);
     if (!before[0]) throw new Error("Follow-up not found");
     const rows = await this.sql.query<FollowUpRow>("update service_follow_ups set outcome = $1, updated_at = now() where id = $2 and user_id = $3 returning id, ro_id, reason, label, outcome, due_at, estimated_opportunity, note, created_manually, created_at", [outcome, id, userId]);
     if (!rows[0]) throw new Error("Follow-up not found");
-    await this.recordEvent(rows[0].ro_id, userId, "follow_up_outcome_changed", before[0].outcome, outcome);
+    await this.recordEvent(rows[0].ro_id, userId, "follow_up_outcome_changed", source ?? "manual", before[0].outcome, outcome);
     const contact = contactForOutcome(outcome);
     if (contact) {
       const occurredAt = new Date().toISOString();
@@ -70,13 +75,13 @@ export class FollowUpRepository {
         [occurredAt, rows[0].ro_id, userId, crypto.randomUUID(), contact.method, contact.direction, `Follow-up: ${before[0].label}`, outcome, contact.sent],
       );
       if (!updated[0]) throw new Error("Repair order changed before customer contact was recorded");
-      await this.recordEvent(rows[0].ro_id, userId, "customer_contacted", null, { method: contact.method, outcome, followUpId: id });
+      await this.recordEvent(rows[0].ro_id, userId, "customer_contacted", source ?? "manual", null, { method: contact.method, outcome, followUpId: id });
     }
     return mapRow(rows[0]);
   }
 
-  private async recordEvent(roId: string, actorId: string, eventType: string, previousValue: unknown, newValue: unknown): Promise<void> {
-    await this.sql.query("insert into ro_events (id, ro_id, event_type, actor_id, source, previous_value, new_value) values ($1,$2,$3,$4,'manual',$5::jsonb,$6::jsonb)", [crypto.randomUUID(), roId, eventType, actorId, JSON.stringify(previousValue), JSON.stringify(newValue)]);
+  private async recordEvent(roId: string, actorId: string, eventType: string, source: string, previousValue: unknown, newValue: unknown): Promise<void> {
+    await this.sql.query("insert into ro_events (id, ro_id, event_type, actor_id, source, previous_value, new_value) values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)", [crypto.randomUUID(), roId, eventType, actorId, source, JSON.stringify(previousValue), JSON.stringify(newValue)]);
   }
 }
 
