@@ -154,6 +154,11 @@ export default defineConfig(({ command, isPreview }) => ({
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
+            // Rolldown otherwise splits the TanStack Start SSR entry into a
+            // facade that re-exports a nonexistent `ssr_exports` binding
+            // (`SyntaxError: Export 'ssr_exports' is not defined in module`)
+            // once the Better Auth OAuth/CIMD graph is in the server bundle.
+            inlineDynamicImports: true,
           }),
         ]
       : []),
