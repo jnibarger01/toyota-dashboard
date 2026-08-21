@@ -140,6 +140,21 @@ export class RepairOrderRepository {
     return rows[0] ? mapRow(rows[0]) : null;
   }
 
+  /**
+   * Matches only approved, allowlisted fields (RO number, customer name,
+   * vehicle make/model) — never free-text fields like `concern` or
+   * `diagnosis`. Callers must pre-escape LIKE metacharacters in `query`
+   * (see `escapeLikePattern`) so a search term can't widen its own match.
+   */
+  async search(userId: string, likePattern: string, limit: number): Promise<RepairOrderRecord[]> {
+    const rows = await this.sql.query<RoRow>(
+      `${SELECT_RO} where ro.user_id = $1 and (ro.ro_number ilike $2 or c.full_name ilike $2 or v.make ilike $2 or v.model ilike $2)
+       order by ro.promised_at nulls last, ro.updated_at desc limit $3`,
+      [userId, likePattern, limit],
+    );
+    return rows.map(mapRow);
+  }
+
   async listRecommendations(userId: string, roId: string): Promise<RecommendationRecord[]> {
     if (!(await this.getById(userId, roId))) throw new Error("Repair order not found");
     const rows = await this.sql.query<{ id: string; description: string; amount: string | number; labor_hours: string | number | null; state: "recommended" | "approved" | "declined"; created_at: string; decided_at: string | null }>("select id, description, amount, labor_hours, state, created_at, decided_at from ro_recommendations where ro_id = $1 order by created_at, id", [roId]);
@@ -172,7 +187,23 @@ export class RepairOrderRepository {
     return record;
   }
 
-  async decideRecommendation(input: { userId: string; roId: string; id: string; state: "recommended" | "approved" | "declined"; expectedVersion: number; actorId: string }): Promise<RepairOrderRecord> {
+  async updateRecommendation(input: { userId: string; roId: string; id: string; expectedVersion: number; actorId: string; description?: string; amount?: number; laborHours?: number | null }): Promise<RepairOrderRecord> {
+    const current = await this.getById(input.userId, input.roId);
+    if (!current) throw new Error("Repair order not found");
+    if (current.version !== input.expectedVersion) throw new Error("Repair order changed elsewhere; refresh before updating the recommendation");
+    const before = await this.sql.query<{ description: string; amount: string | number; labor_hours: string | number | null }>("select description, amount, labor_hours from ro_recommendations where id = $1 and ro_id = $2", [input.id, input.roId]);
+    if (!before[0]) throw new Error("Recommendation not found");
+    const updated = await this.sql.query<{ id: string }>("update ro_recommendations set description = coalesce($1, description), amount = coalesce($2, amount), labor_hours = case when $3::boolean then $4 else labor_hours end where id = $5 and ro_id = $6 returning id", [input.description ?? null, input.amount ?? null, input.laborHours !== undefined, input.laborHours ?? null, input.id, input.roId]);
+    if (!updated[0]) throw new Error("Recommendation not found");
+    const changed = await this.sql.query<{ id: string }>("update repair_orders set local_changed_at = now(), updated_at = now(), version = version + 1, sync_status = 'pending' where id = $1 and user_id = $2 and version = $3 returning id", [input.roId, input.userId, input.expectedVersion]);
+    if (!changed[0]) throw new Error("Repair order changed elsewhere; refresh before updating the recommendation");
+    await this.recordEvent(input.roId, "recommendation_updated", input.actorId, "mcp", before[0], { description: input.description, amount: input.amount, laborHours: input.laborHours });
+    const record = await this.getById(input.userId, input.roId);
+    if (!record) throw new Error("Repair order disappeared after recommendation update");
+    return record;
+  }
+
+  async decideRecommendation(input: { userId: string; roId: string; id: string; state: "recommended" | "approved" | "declined"; expectedVersion: number; actorId: string; source?: string }): Promise<RepairOrderRecord> {
     const updated = await this.sql.query<{ id: string }>(
       `with target as (
         select id from repair_orders where id = $3 and user_id = $4 and version = $5 for update
@@ -195,9 +226,44 @@ export class RepairOrderRepository {
       [input.state, input.id, input.roId, input.userId, input.expectedVersion],
     );
     if (!updated[0]) throw new Error("Recommendation changed elsewhere; refresh before trying again");
-    await this.recordEvent(input.roId, "recommendation_state_changed", input.actorId, "manual", { id: input.id }, { id: input.id, state: input.state });
+    await this.recordEvent(input.roId, "recommendation_state_changed", input.actorId, input.source ?? "manual", { id: input.id }, { id: input.id, state: input.state });
     const record = await this.getById(input.userId, input.roId);
     if (!record) throw new Error("Repair order disappeared after recommendation update");
+    return record;
+  }
+
+  /** Creates an RO using existing customer/vehicle records when supplied. */
+  async createRepairOrder(input: {
+    userId: string; actorId: string; roNumber: string; customerId?: string; vehicleId?: string;
+    customerName?: string; year?: number; make?: string; model?: string; trim?: string; mileage?: number;
+    concern?: string; workflowState?: WorkflowState; appointmentAt?: string | null; promiseAt?: string | null;
+    notes?: string; transportation?: string; waitingCustomer?: boolean;
+  }): Promise<RepairOrderRecord> {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    let customerId = input.customerId;
+    let vehicleId = input.vehicleId;
+    if (customerId) {
+      if (!(await this.sql.query<{ id: string }>("select id from service_customers where id = $1 and user_id = $2", [customerId, input.userId]))[0]) throw new Error("Customer not found");
+    } else {
+      if (!input.customerName?.trim()) throw new Error("customer_name or customer_id is required");
+      customerId = crypto.randomUUID();
+      await this.sql.query("insert into service_customers (id, user_id, full_name) values ($1,$2,$3)", [customerId, input.userId, input.customerName.trim()]);
+    }
+    if (vehicleId) {
+      if (!(await this.sql.query<{ id: string }>("select id from service_vehicles where id = $1 and user_id = $2 and customer_id = $3", [vehicleId, input.userId, customerId]))[0]) throw new Error("Vehicle not found");
+    } else {
+      if (!input.model?.trim()) throw new Error("model or vehicle_id is required");
+      vehicleId = crypto.randomUUID();
+      await this.sql.query("insert into service_vehicles (id, user_id, customer_id, model_year, make, model, trim, mileage) values ($1,$2,$3,$4,$5,$6,$7,$8)", [vehicleId, input.userId, customerId, input.year ?? null, input.make ?? "Toyota", input.model.trim(), input.trim ?? null, input.mileage ?? null]);
+    }
+    const state = input.workflowState ?? "written";
+    await this.sql.query(`insert into repair_orders (id,user_id,ro_number,customer_id,vehicle_id,advisor_id,appointment_at,arrived_at,written_at,promised_at,waiting_customer,transportation,workflow_state,state_entered_at,concern,local_changed_at,version) values ($1,$2,$3,$4,$5,$6,$7,$7,$7,$8,$9,$10,$11,$7,$12,$7,1)`, [id, input.userId, input.roNumber.trim(), customerId, vehicleId, input.actorId, input.appointmentAt ?? now, input.promiseAt ?? null, input.waitingCustomer ?? false, input.transportation ?? "unknown", state, input.concern?.trim() ?? null]);
+    await this.sql.query("insert into ro_status_history (id,ro_id,previous_state,new_state,occurred_at,source,actor_id,notes) values ($1,$2,null,$3,$4,'mcp',$5,'Created through Toyota Dashboard MCP')", [crypto.randomUUID(), id, state, now, input.actorId]);
+    if (input.notes?.trim()) await this.recordInternalNote({ userId: input.userId, roId: id, actorId: input.actorId, note: input.notes.trim(), source: "mcp" });
+    await this.recordEvent(id, "ro_created", input.actorId, "mcp", null, { roNumber: input.roNumber.trim(), state });
+    const record = await this.getById(input.userId, id);
+    if (!record) throw new Error("Repair order could not be created");
     return record;
   }
 
@@ -260,12 +326,12 @@ export class RepairOrderRepository {
    * Applies a small allowlisted set of operational fields under the same
    * optimistic lock as workflow changes. Callers never choose SQL columns.
    */
-  async updateOperational(input: { userId: string; roId: string; expectedVersion: number; actorId: string; promiseAt?: string | null; technicianName?: string | null; technicianFindings?: string | null; diagnosis?: string | null; partsStatus?: string; partsEtaAt?: string | null }): Promise<RepairOrderRecord> {
+  async updateOperational(input: { userId: string; roId: string; expectedVersion: number; actorId: string; promiseAt?: string | null; appointmentAt?: string | null; technicianName?: string | null; technicianFindings?: string | null; diagnosis?: string | null; concern?: string | null; partsStatus?: string; partsEtaAt?: string | null; source?: string }): Promise<RepairOrderRecord> {
     const current = await this.getById(input.userId, input.roId);
     if (!current) throw new Error("Repair order not found");
     if (current.version !== input.expectedVersion) throw new Error("Repair order changed elsewhere; refresh before trying again");
-    const fields: Array<[keyof Pick<typeof input, "promiseAt" | "technicianName" | "technicianFindings" | "diagnosis" | "partsStatus" | "partsEtaAt">, string, keyof RepairOrderRecord]> = [
-      ["promiseAt", "promised_at", "promiseAt"], ["technicianName", "technician_name", "technicianName"], ["technicianFindings", "technician_findings", "technicianFindings"], ["diagnosis", "diagnosis", "diagnosis"], ["partsStatus", "parts_status", "partsStatus"], ["partsEtaAt", "parts_eta_at", "partsEtaAt"],
+    const fields: Array<[keyof Pick<typeof input, "promiseAt" | "appointmentAt" | "technicianName" | "technicianFindings" | "diagnosis" | "concern" | "partsStatus" | "partsEtaAt">, string, keyof RepairOrderRecord]> = [
+      ["promiseAt", "promised_at", "promiseAt"], ["appointmentAt", "appointment_at", "appointmentAt"], ["technicianName", "technician_name", "technicianName"], ["technicianFindings", "technician_findings", "technicianFindings"], ["diagnosis", "diagnosis", "diagnosis"], ["concern", "concern", "concern"], ["partsStatus", "parts_status", "partsStatus"], ["partsEtaAt", "parts_eta_at", "partsEtaAt"],
     ];
     const changed = fields.filter(([key, , recordKey]) => input[key] !== undefined && input[key] !== current[recordKey]);
     if (!changed.length) return current;
@@ -276,7 +342,7 @@ export class RepairOrderRepository {
     if (!updated[0]) throw new Error("Repair order changed elsewhere; refresh before trying again");
     const previous = Object.fromEntries(changed.map(([key, , recordKey]) => [key, current[recordKey]]));
     const next = Object.fromEntries(changed.map(([key]) => [key, input[key]]));
-    await this.recordEvent(input.roId, "operational_fields_updated", input.actorId, "manual", previous, next);
+    await this.recordEvent(input.roId, "operational_fields_updated", input.actorId, input.source ?? "manual", previous, next);
     const record = await this.getById(input.userId, input.roId);
     if (!record) throw new Error("Repair order disappeared after update");
     return record;
@@ -307,7 +373,7 @@ export class RepairOrderRepository {
     return record;
   }
 
-  async recordContact(input: { userId: string; roId: string; expectedVersion: number; actorId: string; method: "phone" | "sms" | "email" | "in_person" | "voicemail"; summary: string; message?: string; outcome?: string; intervalMinutes: number }): Promise<RepairOrderRecord> {
+  async recordContact(input: { userId: string; roId: string; expectedVersion: number; actorId: string; method: "phone" | "sms" | "email" | "in_person" | "voicemail"; summary: string; message?: string; outcome?: string; intervalMinutes: number; source?: string }): Promise<RepairOrderRecord> {
     const existing = await this.getById(input.userId, input.roId);
     if (!existing) throw new Error("Repair order not found");
     if (existing.version !== input.expectedVersion) throw new Error("Repair order changed elsewhere; refresh before recording contact");
@@ -321,27 +387,50 @@ export class RepairOrderRepository {
     );
     if (!updated[0]) throw new Error("Repair order changed elsewhere; refresh before recording contact");
     await this.sql.query(
-      "insert into ro_communications (id, ro_id, occurred_at, method, direction, advisor_id, summary, message, outcome, source, ai_generated, sent) values ($1,$2,$3,$4,'outgoing',$5,$6,$7,$8,'manual',false,true)",
-      [crypto.randomUUID(), input.roId, now.toISOString(), input.method, input.actorId, input.summary, input.message ?? null, input.outcome ?? null],
+      "insert into ro_communications (id, ro_id, occurred_at, method, direction, advisor_id, summary, message, outcome, source, ai_generated, sent) values ($1,$2,$3,$4,'outgoing',$5,$6,$7,$8,$9,false,true)",
+      [crypto.randomUUID(), input.roId, now.toISOString(), input.method, input.actorId, input.summary, input.message ?? null, input.outcome ?? null, input.source ?? "manual"],
     );
-    await this.recordEvent(input.roId, "customer_contacted", input.actorId, "manual", null, { method: input.method, summary: input.summary });
+    await this.recordEvent(input.roId, "customer_contacted", input.actorId, input.source ?? "manual", null, { method: input.method, summary: input.summary });
     const record = await this.getById(input.userId, input.roId);
     if (!record) throw new Error("Repair order disappeared after contact");
     return record;
   }
 
   /** Stores an advisor-only note in the immutable RO activity stream. */
-  async recordInternalNote(input: { userId: string; roId: string; actorId: string; note: string }): Promise<void> {
+  async recordInternalNote(input: { userId: string; roId: string; actorId: string; note: string; source?: string }): Promise<void> {
     if (!(await this.getById(input.userId, input.roId))) throw new Error("Repair order not found");
     const now = new Date().toISOString();
     await this.sql.query(
-      "insert into ro_communications (id, ro_id, occurred_at, method, direction, advisor_id, summary, source, ai_generated, sent) values ($1,$2,$3,'internal_note','internal',$4,$5,'manual',false,false)",
-      [crypto.randomUUID(), input.roId, now, input.actorId, input.note],
+      "insert into ro_communications (id, ro_id, occurred_at, method, direction, advisor_id, summary, source, ai_generated, sent) values ($1,$2,$3,'internal_note','internal',$4,$5,$6,false,false)",
+      [crypto.randomUUID(), input.roId, now, input.actorId, input.note, input.source ?? "manual"],
     );
-    await this.recordEvent(input.roId, "internal_note_added", input.actorId, "manual", null, { note: input.note });
+    await this.recordEvent(input.roId, "internal_note_added", input.actorId, input.source ?? "manual", null, { note: input.note });
   }
 
-  async addBlocker(input: { userId: string; roId: string; actorId: string; type: string; description: string; severity: string; owner?: string; expectedVersion: number }): Promise<RepairOrderRecord> {
+  async assign(input: { userId: string; roId: string; advisorId: string; actorId: string }): Promise<RepairOrderRecord> {
+    const current = await this.getById(input.userId, input.roId);
+    if (!current) throw new Error("Repair order not found");
+    if (!(await this.sql.query<{ id: string }>('select id from "user" where id = $1', [input.advisorId]))[0]) throw new Error("Assignee not found");
+    const updated = await this.sql.query<{ id: string }>("update repair_orders set advisor_id = $1, local_changed_at = now(), updated_at = now(), version = version + 1, sync_status = 'pending' where id = $2 and user_id = $3 returning id", [input.advisorId, input.roId, input.userId]);
+    if (!updated[0]) throw new Error("Repair order changed elsewhere; refresh before assigning");
+    await this.recordEvent(input.roId, "advisor_assigned", input.actorId, "mcp", null, { advisorId: input.advisorId });
+    const record = await this.getById(input.userId, input.roId);
+    if (!record) throw new Error("Repair order disappeared after assignment");
+    return record;
+  }
+
+  async close(input: { userId: string; roId: string; expectedVersion: number; actorId: string }): Promise<RepairOrderRecord> {
+    const current = await this.getById(input.userId, input.roId);
+    if (!current) throw new Error("Repair order not found");
+    if (current.state === "delivered") throw new Error("Repair order is already closed");
+    if (current.state !== "ready") throw new Error(`Cannot close repair order from ${current.state}; move it to ready first`);
+    await this.transition({ userId: input.userId, roId: input.roId, to: "delivered", expectedVersion: input.expectedVersion, actorId: input.actorId, source: "mcp", reason: "Explicitly closed through Toyota Dashboard MCP" });
+    const record = await this.getById(input.userId, input.roId);
+    if (!record) throw new Error("Repair order disappeared after closing");
+    return record;
+  }
+
+  async addBlocker(input: { userId: string; roId: string; actorId: string; type: string; description: string; severity: string; owner?: string; expectedVersion: number; source?: string }): Promise<RepairOrderRecord> {
     const record = await this.getById(input.userId, input.roId);
     if (!record) throw new Error("Repair order not found");
     if (record.version !== input.expectedVersion) throw new Error("Repair order changed elsewhere; refresh before adding a blocker");
@@ -359,14 +448,14 @@ export class RepairOrderRepository {
       [input.roId, input.userId, input.expectedVersion, blockerId, input.type, input.description, input.severity, input.owner ?? null, now],
     );
     if (!updated[0]) throw new Error("Repair order changed elsewhere; refresh before adding a blocker");
-    await this.recordEvent(input.roId, "blocker_added", input.actorId, "manual", null, { type: input.type, description: input.description });
+    await this.recordEvent(input.roId, "blocker_added", input.actorId, input.source ?? "manual", null, { type: input.type, description: input.description });
     const current = await this.getById(input.userId, input.roId);
     if (!current) throw new Error("Repair order disappeared after adding a blocker");
     return current;
   }
 
   /** Resolves one active blocker without affecting other blockers on the RO. */
-  async resolveBlocker(input: { userId: string; roId: string; blockerId: string; expectedVersion: number; actorId: string }): Promise<RepairOrderRecord> {
+  async resolveBlocker(input: { userId: string; roId: string; blockerId: string; expectedVersion: number; actorId: string; source?: string }): Promise<RepairOrderRecord> {
     const current = await this.getById(input.userId, input.roId);
     if (!current) throw new Error("Repair order not found");
     if (current.version !== input.expectedVersion) throw new Error("Repair order changed elsewhere; refresh before resolving the blocker");
@@ -388,7 +477,7 @@ export class RepairOrderRepository {
       [input.roId, input.userId, input.expectedVersion, now, input.blockerId],
     );
     if (!updated[0]) throw new Error("Repair order changed elsewhere; refresh before resolving the blocker");
-    await this.recordEvent(input.roId, "blocker_resolved", input.actorId, "manual", blocker, { ...blocker, resolvedAt: now });
+    await this.recordEvent(input.roId, "blocker_resolved", input.actorId, input.source ?? "manual", blocker, { ...blocker, resolvedAt: now });
     const record = await this.getById(input.userId, input.roId);
     if (!record) throw new Error("Repair order disappeared after blocker resolution");
     return record;

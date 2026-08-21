@@ -23,6 +23,7 @@ import { Route as AppPerformanceRouteImport } from './routes/_app/performance'
 import { Route as AppRosRouteImport } from './routes/_app/ros'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppVehiclesRouteImport } from './routes/_app/vehicles'
+import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as AppFleetIndexRouteImport } from './routes/_app/fleet/index'
 import { Route as AppFleetAlertsRouteImport } from './routes/_app/fleet/alerts'
 import { Route as AppFleetDriversRouteImport } from './routes/_app/fleet/drivers'
@@ -101,6 +102,11 @@ const AppVehiclesRoute = AppVehiclesRouteImport.update({
   path: '/vehicles',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppFleetIndexRoute = AppFleetIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -156,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/ros': typeof AppRosRoute
   '/settings': typeof AppSettingsRoute
   '/vehicles': typeof AppVehiclesRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/fleet/alerts': typeof AppFleetAlertsRoute
   '/fleet/drivers': typeof AppFleetDriversRoute
   '/fleet/fuel': typeof AppFleetFuelRoute
@@ -177,6 +184,7 @@ export interface FileRoutesByTo {
   '/ros': typeof AppRosRoute
   '/settings': typeof AppSettingsRoute
   '/vehicles': typeof AppVehiclesRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/': typeof AppIndexRoute
   '/fleet/alerts': typeof AppFleetAlertsRoute
   '/fleet/drivers': typeof AppFleetDriversRoute
@@ -202,6 +210,7 @@ export interface FileRoutesById {
   '/_app/ros': typeof AppRosRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/vehicles': typeof AppVehiclesRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/_app/': typeof AppIndexRoute
   '/_app/fleet/alerts': typeof AppFleetAlertsRoute
   '/_app/fleet/drivers': typeof AppFleetDriversRoute
@@ -228,6 +237,7 @@ export interface FileRouteTypes {
     | '/ros'
     | '/settings'
     | '/vehicles'
+    | '/api/mcp'
     | '/fleet/alerts'
     | '/fleet/drivers'
     | '/fleet/fuel'
@@ -249,6 +259,7 @@ export interface FileRouteTypes {
     | '/ros'
     | '/settings'
     | '/vehicles'
+    | '/api/mcp'
     | '/'
     | '/fleet/alerts'
     | '/fleet/drivers'
@@ -273,6 +284,7 @@ export interface FileRouteTypes {
     | '/_app/ros'
     | '/_app/settings'
     | '/_app/vehicles'
+    | '/api/mcp'
     | '/_app/'
     | '/_app/fleet/alerts'
     | '/_app/fleet/drivers'
@@ -287,6 +299,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiMcpRoute: typeof ApiMcpRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -389,6 +402,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/vehicles'
       preLoaderRoute: typeof AppVehiclesRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/fleet/': {
       id: '/_app/fleet/'
@@ -508,6 +528,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiMcpRoute: ApiMcpRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
