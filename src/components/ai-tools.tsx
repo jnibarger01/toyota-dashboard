@@ -40,6 +40,11 @@ export function AiTools({ defaultTool }: { defaultTool?: "update" | "cleaner" | 
     return candidates.filter((candidate) => settings.aiEnabledModes.includes(candidate.id));
   }, [settings.aiEnabledModes, tool]);
   useEffect(() => { if (modes.length && !modes.some((candidate) => candidate.id === mode)) setMode(modes[0]!.id); }, [mode, modes]);
+  useEffect(() => {
+    setSource(composer?.source ?? "");
+    setOut("");
+    setError(null);
+  }, [composer?.roId, composer?.source, tool]);
 
   async function run() {
     setBusy(true);

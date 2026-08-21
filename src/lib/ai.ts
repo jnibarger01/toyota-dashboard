@@ -49,6 +49,16 @@ type Input = {
   concern?: string;
 };
 
+async function openAiError(res: Response) {
+  try {
+    const body = (await res.json()) as { error?: { message?: string } };
+    const message = body.error?.message?.trim().slice(0, 300);
+    return message ? `OpenAI API error ${res.status}: ${message}` : `OpenAI API error ${res.status}`;
+  } catch {
+    return `OpenAI API error ${res.status}`;
+  }
+}
+
 export const rewriteAdvisorText = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: Input) => {
@@ -90,9 +100,11 @@ export const rewriteAdvisorText = createServerFn({ method: "POST" })
         ],
       }),
     });
-    if (!res.ok) return { ok: false as const, error: `OpenAI API error ${res.status}` };
+    if (!res.ok) return { ok: false as const, error: await openAiError(res) };
     const body = (await res.json()) as { choices: { message: { content: string } }[] };
-    return { ok: true as const, text: body.choices[0]?.message.content ?? "" };
+    const text = body.choices[0]?.message.content?.trim();
+    if (!text) return { ok: false as const, error: "OpenAI returned an empty response" };
+    return { ok: true as const, text };
   });
 
 /**
@@ -123,7 +135,9 @@ export const draftVerifiedCustomerUpdate = createServerFn({ method: "POST" })
         ],
       }),
     });
-    if (!res.ok) return { ok: false as const, error: `OpenAI API error ${res.status}` };
+    if (!res.ok) return { ok: false as const, error: await openAiError(res) };
     const body = (await res.json()) as { choices: { message: { content: string } }[] };
-    return { ok: true as const, text: body.choices[0]?.message.content ?? "", facts };
+    const text = body.choices[0]?.message.content?.trim();
+    if (!text) return { ok: false as const, error: "OpenAI returned an empty response" };
+    return { ok: true as const, text, facts };
   });
