@@ -62,20 +62,20 @@ export const rewriteAdvisorText = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data }) => {
-    const apiKey = process.env.XAI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return { ok: false as const, error: "AI is not available in this environment" };
     if (!data.source) return { ok: false as const, error: "Nothing to rewrite" };
     const mode = MODE_INSTRUCTIONS[data.mode];
     if (!mode) return { ok: false as const, error: "Unknown mode" };
 
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-4.5",
+        model: "gpt-4.1-mini",
         max_tokens: 420,
         messages: [
           {
@@ -90,7 +90,7 @@ export const rewriteAdvisorText = createServerFn({ method: "POST" })
         ],
       }),
     });
-    if (!res.ok) return { ok: false as const, error: `xAI API error ${res.status}` };
+    if (!res.ok) return { ok: false as const, error: `OpenAI API error ${res.status}` };
     const body = (await res.json()) as { choices: { message: { content: string } }[] };
     return { ok: true as const, text: body.choices[0]?.message.content ?? "" };
   });
@@ -107,23 +107,23 @@ export const draftVerifiedCustomerUpdate = createServerFn({ method: "POST" })
     mode: input.mode && input.mode.startsWith("update_") ? input.mode : "update_simple" as RewriteMode,
   }))
   .handler(async ({ data, context }) => {
-    const apiKey = process.env.XAI_API_KEY;
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return { ok: false as const, error: "AI is not available in this environment" };
     const ro = await (await RepairOrderRepository.connect()).getById(context.userId, data.roId);
     if (!ro) return { ok: false as const, error: "Repair order not found" };
     const facts = buildVerifiedRoFacts(ro);
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: "grok-4.5", max_tokens: 220,
+        model: "gpt-4.1-mini", max_tokens: 220,
         messages: [
           { role: "system", content: `Draft one customer-safe dealership update. ${MODE_INSTRUCTIONS[data.mode] ?? MODE_INSTRUCTIONS.update_simple} Use only the supplied JSON facts. Never infer or invent diagnoses, parts, prices, labor, availability, completion times, safety consequences, warranties, discounts, or policy. Omit missing fields. This is a draft only; do not claim it was sent.` },
           { role: "user", content: JSON.stringify({ tone: data.tone, facts }) },
         ],
       }),
     });
-    if (!res.ok) return { ok: false as const, error: `xAI API error ${res.status}` };
+    if (!res.ok) return { ok: false as const, error: `OpenAI API error ${res.status}` };
     const body = (await res.json()) as { choices: { message: { content: string } }[] };
     return { ok: true as const, text: body.choices[0]?.message.content ?? "", facts };
   });
