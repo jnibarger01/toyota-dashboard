@@ -140,7 +140,18 @@ export const useAppStore = create<LaneState>()(
         if (!IS_STATIC_DEMO) return;
         set({ ...seedAll(now), selectedId: null, query: "", boardFilter: "all" });
       },
-      hydrate: (snapshot, persist) => set({ ...snapshot, hydrated: true, persist, loadError: null, selectedId: null, query: "", boardFilter: "all" }),
+      hydrate: (snapshot, persist) => {
+        const selectedId = get().selectedId;
+        set({
+          ...snapshot,
+          hydrated: true,
+          persist,
+          loadError: null,
+          selectedId: selectedId && snapshot.ros.some((ro) => ro.id === selectedId) ? selectedId : null,
+          query: "",
+          boardFilter: "all",
+        });
+      },
       setLoadError: (loadError) => set({ loadError }),
   }),
 );
