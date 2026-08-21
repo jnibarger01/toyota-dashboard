@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { registerGetLaneSummary } from "./tools/get-lane-summary";
 import { registerListRepairOrders } from "./tools/list-repair-orders";
 import { registerGetRepairOrder } from "./tools/get-repair-order";

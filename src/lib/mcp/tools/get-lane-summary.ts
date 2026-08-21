@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { RepairOrderRepository } from "@/lib/ro-repository.server";
 import { FollowUpRepository } from "@/lib/follow-up-repository.server";
 import { projectRepairOrder } from "@/lib/ro-projection";

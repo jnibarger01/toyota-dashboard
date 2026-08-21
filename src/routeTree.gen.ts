@@ -9,7 +9,9 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SplatRouteImport } from './routes/$'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAlertsRouteImport } from './routes/_app/alerts'
@@ -33,8 +35,18 @@ import { Route as AppFleetSettingsRouteImport } from './routes/_app/fleet/settin
 import { Route as AppFleetVehiclesRouteImport } from './routes/_app/fleet/vehicles'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
+const SplatRoute = SplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConsentRoute = ConsentRouteImport.update({
+  id: '/consent',
+  path: '/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -149,7 +161,9 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
+  '/$': typeof SplatRoute
   '/': typeof AppIndexRoute
+  '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
   '/alerts': typeof AppAlertsRoute
   '/drivers': typeof AppDriversRoute
@@ -173,6 +187,8 @@ export interface FileRoutesByFullPath {
   '/fleet/': typeof AppFleetIndexRoute
 }
 export interface FileRoutesByTo {
+  '/$': typeof SplatRoute
+  '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
   '/alerts': typeof AppAlertsRoute
   '/drivers': typeof AppDriversRoute
@@ -197,7 +213,9 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/$': typeof SplatRoute
   '/_app': typeof AppRouteWithChildren
+  '/consent': typeof ConsentRoute
   '/login': typeof LoginRoute
   '/_app/alerts': typeof AppAlertsRoute
   '/_app/drivers': typeof AppDriversRoute
@@ -224,7 +242,9 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/$'
     | '/'
+    | '/consent'
     | '/login'
     | '/alerts'
     | '/drivers'
@@ -248,6 +268,8 @@ export interface FileRouteTypes {
     | '/fleet/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/$'
+    | '/consent'
     | '/login'
     | '/alerts'
     | '/drivers'
@@ -271,7 +293,9 @@ export interface FileRouteTypes {
     | '/fleet'
   id:
     | '__root__'
+    | '/$'
     | '/_app'
+    | '/consent'
     | '/login'
     | '/_app/alerts'
     | '/_app/drivers'
@@ -297,7 +321,9 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  SplatRoute: typeof SplatRoute
   AppRoute: typeof AppRouteWithChildren
+  ConsentRoute: typeof ConsentRoute
   LoginRoute: typeof LoginRoute
   ApiMcpRoute: typeof ApiMcpRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -305,11 +331,25 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/$': {
+      id: '/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof SplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app': {
       id: '/_app'
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/consent': {
+      id: '/consent'
+      path: '/consent'
+      fullPath: '/consent'
+      preLoaderRoute: typeof ConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -526,7 +566,9 @@ const AppRouteChildren: AppRouteChildren = {
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
+  SplatRoute: SplatRoute,
   AppRoute: AppRouteWithChildren,
+  ConsentRoute: ConsentRoute,
   LoginRoute: LoginRoute,
   ApiMcpRoute: ApiMcpRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

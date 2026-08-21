@@ -29,8 +29,8 @@ try {
     [userId, email.split("@")[0], email, true, now],
   );
   await client.query(
-    'insert into "account" (id, "accountId", "providerId", "userId", password, "createdAt", "updatedAt") values ($1, $2, $3, $4, $5, $6, $6)',
-    [accountId, email, "credential", userId, passwordHash, now],
+    'insert into "account" (id, issuer, "accountId", "providerId", "userId", password, "createdAt", "updatedAt") values ($1, $2, $3, $4, $5, $6, $7, $7)',
+    [accountId, "local:credential", userId, "credential", userId, passwordHash, now],
   );
   await client.query("COMMIT");
   console.log(`Seeded one password user: ${email}`);

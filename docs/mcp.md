@@ -44,12 +44,45 @@ run in **stateless** mode (`sessionIdGenerator: undefined`, `enableJsonResponse:
 server-held connection state, one JSON response per request. This is the shape recommended for
 serverless/Vercel deployments — see `src/routes/api/mcp.ts`.
 
-## Authentication
+## OAuth 2.1 / MCP authorization
 
-**There is no API-key plugin in the installed Better Auth version** (`better-auth@1.6.30` — checked its
-package `exports` map: only session/bearer/OIDC-provider-style plugins ship, no `api-key` plugin).
-Standing up a full OAuth provider on top of the existing Grok-broker-federated Better Auth setup would be
-disproportionate. So this ships the narrowest mechanism that fits the existing app:
+The MCP endpoint now supports Better Auth 1.7 OAuth 2.1 authorization-code + S256 PKCE while retaining legacy `toyota_mcp_*` static bearer tokens for backward compatibility.
+
+The canonical production configuration is:
+
+| Purpose | URL |
+| --- | --- |
+| Issuer / authorization server | `https://<production-domain>/api/auth` |
+| Authorization endpoint | `https://<production-domain>/api/auth/oauth2/authorize` |
+| Token endpoint | `https://<production-domain>/api/auth/oauth2/token` |
+| Public client registration | `https://<production-domain>/api/auth/oauth2/register` |
+| Authorization-server metadata | `https://<production-domain>/api/auth/.well-known/oauth-authorization-server` |
+| Protected-resource metadata | `https://<production-domain>/.well-known/oauth-protected-resource/api/mcp` |
+| Login page | `https://<production-domain>/login` |
+| Consent page | `https://<production-domain>/consent` |
+
+`MCP_RESOURCE_URL` must be the exact public HTTPS resource identifier, normally `https://<production-domain>/api/mcp`. Better Auth binds OAuth access tokens to that resource as their audience. The MCP route verifies the JWT signature through Better Auth JWKS, issuer, audience, and expiry before mapping `sub` to an existing Better Auth `user.id`. Per-tool Toyota scope checks and existing `user_id` ownership checks then remain authoritative.
+
+The supported public-client settings are:
+
+- Authorization Code grant
+- S256 PKCE required
+- `token_endpoint_auth_method=none`
+- No client secret required
+- Scopes: `toyota:read`, `toyota:ro:write`, `toyota:communication:write`, `toyota:followup:write`, `toyota:recommendation:write`
+
+Dynamic client registration is explicitly enabled for compatibility with clients that do not use Client ID Metadata Documents. The registered client still receives resource-bound tokens and must request the exact MCP resource. Better Auth's `cimd()` integration is also enabled for current MCP client discovery.
+
+The required production environment variable is:
+
+```env
+MCP_RESOURCE_URL=https://<production-domain>/api/mcp
+```
+
+Better Auth 1.7 OAuth/MCP tables are added by `migrations/0012_better_auth_oauth_mcp.sql`; apply it through the normal migration path before enabling production OAuth.
+
+
+Legacy static bearer tokens remain supported for backward compatibility while external clients migrate to OAuth 2.1. The OAuth provider is now Better Auth 1.7's `mcp()` integration, not a generic API-key plugin. The static compatibility path remains narrow:
 
 - A dedicated table, `mcp_api_tokens` (migration `0010_mcp_access.sql`): `id`, `user_id` (references
   Better Auth's `"user"(id)`, but is never selected *from* — the MCP surface only ever uses it as an

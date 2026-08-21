@@ -1,47 +1,60 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { authenticateMcpRequest, McpHttpError } from "@/lib/mcp/auth";
+import { requireMcpAuth } from "@better-auth/mcp";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
+import { authenticateMcpRequest, McpHttpError, type McpAuthContext } from "@/lib/mcp/auth";
+import { authenticateOAuthClaims } from "@/lib/mcp/oauth";
 import { createMcpServer } from "@/lib/mcp/server";
+import { auth, authIssuerURL, mcpResourceURL } from "@/lib/auth/server";
 
-/**
- * Remote MCP endpoint — `/api/mcp`. Read-only Toyota service-lane tools over
- * the Streamable HTTP transport (stateless: no session id, one JSON response
- * per request, no server-held connection state between requests — the right
- * shape for a serverless/Fluid Compute deployment). See docs/mcp.md.
- *
- * Auth runs BEFORE any MCP protocol/server work: an invalid or missing
- * bearer token never reaches tool listing or the database.
- */
+function hasStaticBearer(request: Request): boolean {
+  return /^Bearer\s+toyota_mcp_/i.test(request.headers.get("authorization")?.trim() ?? "");
+}
+
+async function handleAuthenticatedMcpRequest(request: Request, authContext: McpAuthContext): Promise<Response> {
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+  const server = createMcpServer();
+  await server.connect(transport);
+  const requestId = crypto.randomUUID();
+  return transport.handleRequest(request, {
+    authInfo: {
+      token: "redacted",
+      clientId: authContext.userId,
+      scopes: authContext.scopes,
+      extra: { userId: authContext.userId, tokenId: authContext.tokenId, requestId },
+    },
+  });
+}
+
+const oauthMcpHandler = requireMcpAuth(
+  auth,
+  async (request, claims) => {
+    const sql = await (await import("@/lib/db")).getSql();
+    const authContext = await authenticateOAuthClaims(claims as Record<string, unknown>, sql, mcpResourceURL);
+    return handleAuthenticatedMcpRequest(request, authContext);
+  },
+  {
+    resource: mcpResourceURL,
+    issuer: authIssuerURL,
+    jwksUrl: `${authIssuerURL.replace(/\/$/, "")}/jwks`,
+  },
+);
+
 async function handleMcpRequest(request: Request): Promise<Response> {
   try {
-    const auth = await authenticateMcpRequest(request);
-
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined, // stateless
-      enableJsonResponse: true, // single JSON response, no SSE stream to keep open
-    });
-    const server = createMcpServer();
-    await server.connect(transport);
-
-    // One request id per HTTP request (not the client-supplied JSON-RPC id,
-    // which isn't guaranteed unique/trustworthy) — propagated to every write
-    // tool's audit entry.
-    const requestId = crypto.randomUUID();
-    return await transport.handleRequest(request, {
-      authInfo: {
-        token: "redacted",
-        clientId: auth.userId,
-        scopes: auth.scopes,
-        extra: { userId: auth.userId, tokenId: auth.tokenId, requestId },
-      },
-    });
+    if (hasStaticBearer(request)) {
+      const authContext = await authenticateMcpRequest(request);
+      return await handleAuthenticatedMcpRequest(request, authContext);
+    }
+    return await oauthMcpHandler(request);
   } catch (err) {
     if (err instanceof McpHttpError) {
       const headers: Record<string, string> = { "content-type": "application/json" };
       if (err.status === 401) headers["www-authenticate"] = 'Bearer realm="toyota-dashboard-mcp"';
       return new Response(JSON.stringify({ error: err.message }), { status: err.status, headers });
     }
-    // Never let a raw driver/stack-trace message reach the client.
     console.error("[mcp] unhandled request error", err);
     return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: { "content-type": "application/json" } });
   }
@@ -50,9 +63,7 @@ async function handleMcpRequest(request: Request): Promise<Response> {
 export const Route = createFileRoute("/api/mcp")({
   server: {
     handlers: {
-      GET: ({ request }) => handleMcpRequest(request),
       POST: ({ request }) => handleMcpRequest(request),
-      DELETE: ({ request }) => handleMcpRequest(request),
     },
   },
 });

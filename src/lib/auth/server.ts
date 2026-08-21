@@ -29,7 +29,10 @@
  * a verified id via `@/lib/auth/middleware`.
  */
 import { betterAuth } from "better-auth";
-import { bearer } from "better-auth/plugins";
+import { bearer, jwt } from "better-auth/plugins";
+import { cimd } from "@better-auth/cimd";
+import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { mcp } from "@better-auth/mcp";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
@@ -38,6 +41,7 @@ import { ensureDbReady, getPglite } from "../db";
 import { emailAndPasswordEnabled } from "./email-password";
 import { pgliteDialect } from "./pglite-dialect";
 import { PREVIEW_ALLOWED_HOSTS } from "./preview";
+import { SCOPES } from "../mcp/scopes";
 
 // Kick (and share) PGLite bootstrap as soon as the auth server module loads.
 void ensureDbReady();
@@ -76,6 +80,9 @@ export const authConfigured = !authDisabled;
 // preview allowlist, which makes the OAuth `redirect_uri` the concrete preview URL
 // the broker's preview client accepts.
 const explicitBaseURL = env("BETTER_AUTH_URL");
+export const authBaseURL = explicitBaseURL ?? "http://localhost:8080";
+export const authIssuerURL = `${authBaseURL.replace(/\/$/, "")}/api/auth`;
+export const mcpResourceURL = env("MCP_RESOURCE_URL") ?? `${authBaseURL.replace(/\/$/, "")}/api/mcp`;
 // Explicit `string[]` (not a readonly tuple) — Better Auth's DynamicBaseURLConfig
 // requires a mutable `allowedHosts: string[]`.
 const previewAllowedHosts: string[] = [...PREVIEW_ALLOWED_HOSTS];
@@ -169,6 +176,32 @@ export const auth = betterAuth({
     // fires when an Authorization header is present, so the cookie path
     // (deployed apps) is unaffected.
     bearer(),
+
+    jwt(),
+
+    mcp({
+      loginPage: "/login",
+      consentPage: "/consent",
+      resource: mcpResourceURL,
+      scopes: [
+        "openid",
+        "profile",
+        "offline_access",
+        SCOPES.READ,
+        SCOPES.RO_WRITE,
+        SCOPES.COMMUNICATION_WRITE,
+        SCOPES.FOLLOWUP_WRITE,
+        SCOPES.RECOMMENDATION_WRITE,
+      ],
+      // Public clients such as Grok may register without a client secret.
+      allowDynamicClientRegistration: true,
+      allowUnauthenticatedClientRegistration: true,
+    }),
+
+    cimd({
+      fetchClientMetadataResource,
+      metadataProfile: "mcp-2026-07-28",
+    }),
 
     // Bridges Better Auth's Set-Cookie into TanStack Start responses. MUST be
     // last so it runs after every other plugin's hooks.
