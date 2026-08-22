@@ -193,9 +193,15 @@ export const auth = betterAuth({
         SCOPES.FOLLOWUP_WRITE,
         SCOPES.RECOMMENDATION_WRITE,
       ],
-      // Public clients such as Grok may register without a client secret.
-      allowDynamicClientRegistration: true,
-      allowUnauthenticatedClientRegistration: true,
+      // Dynamic client registration is OFF: enabling it (especially combined
+      // with `allowUnauthenticatedClientRegistration`) lets ANY anonymous
+      // caller register an OAuth client and, via the consent flow, obtain a
+      // token scoped to `toyota:ro:write`/etc. — i.e. anonymous write access
+      // to repair-order data. Register MCP clients out of band (an
+      // authenticated admin flow, or `scripts/mint-mcp-token.mjs` for the
+      // existing static-bearer path) instead of opening self-registration.
+      allowDynamicClientRegistration: false,
+      allowUnauthenticatedClientRegistration: false,
     }),
 
     cimd({
