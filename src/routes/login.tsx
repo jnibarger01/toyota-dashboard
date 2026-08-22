@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { authEnabled, signInWithPassword } from "@/lib/auth/client";
+import { authClient, authEnabled, signInWithPassword } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState, type FormEvent } from "react";
+import { pendingOAuthAuthorizationURL, currentAuthReturnURL } from "@/lib/auth/oauth-return";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 export const Route = createFileRoute("/login")({ component: Login });
 
@@ -11,16 +13,52 @@ function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { user, isPending } = useCurrentUserState();
+  const pendingAuthorizationURL = useMemo(
+    () => (typeof window === "undefined" ? null : pendingOAuthAuthorizationURL(window.location.search)),
+    [],
+  );
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  // After Google returns to /login, replay the original Toyota authorization
+  // request so Better Auth can render /consent instead of landing on the home page.
+  useEffect(() => {
+    if (!pendingAuthorizationURL || isPending || !user) return;
+    window.location.replace(pendingAuthorizationURL);
+  }, [isPending, pendingAuthorizationURL, user]);
+
+  function authReturnURL(): string {
+    if (typeof window === "undefined") return "/";
+    return currentAuthReturnURL(window.location);
+  }
+
+  async function signInWithGoogle(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    const result = await authClient.signIn.social({
+      provider: "google",
+      callbackURL: authReturnURL(),
+    });
+    if (result.error) {
+      setError(result.error.message ?? "Google sign-in failed");
+      setBusy(false);
+      return;
+    }
+    if (result.data?.url) window.location.assign(result.data.url);
+    else {
+      setError("Google sign-in did not return a redirect");
+      setBusy(false);
+    }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setBusy(true);
     setError(null);
-    const message = await signInWithPassword(email.trim(), password);
+    const message = await signInWithPassword(email.trim(), password, authReturnURL());
     if (message) {
       setError("Invalid email or password.");
       setBusy(false);
-    } else {
+    } else if (!pendingAuthorizationURL) {
       window.location.href = "/";
     }
   }
@@ -38,12 +76,22 @@ function Login() {
           </div>
         </div>
         {authEnabled ? (
-          <form className="space-y-3" onSubmit={submit}>
-            <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" autoComplete="username" required />
-            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete="current-password" required />
-            <Button type="submit" className="w-full" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</Button>
+          <div className="space-y-4">
+            <Button type="button" className="w-full" disabled={busy} onClick={() => void signInWithGoogle()}>
+              {busy ? "Connecting…" : "Continue with Google"}
+            </Button>
+            <div className="flex items-center gap-3 text-xs text-muted">
+              <span className="h-px flex-1 bg-border" />
+              <span>or use email</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <form className="space-y-3" onSubmit={submit}>
+              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" autoComplete="username" required />
+              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete="current-password" required />
+              <Button type="submit" variant="outline" className="w-full" disabled={busy}>{busy ? "Signing in…" : "Sign in with email"}</Button>
+            </form>
             {error ? <p role="alert" className="text-sm text-accent">{error}</p> : null}
-          </form>
+          </div>
         ) : (
           <p className="text-sm text-muted">Sign-in is disabled in this environment.</p>
         )}
