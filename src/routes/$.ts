@@ -5,12 +5,19 @@ import { SCOPES } from "@/lib/mcp/scopes";
 
 const resourceClient = oauthProviderResourceClient(auth);
 const protectedResourcePath = "/.well-known/oauth-protected-resource/api/mcp";
+const issuerDerivedMetadataPath = "/.well-known/oauth-authorization-server/api/auth";
+const canonicalMetadataPath = "/api/auth/.well-known/oauth-authorization-server";
 
 export const Route = createFileRoute("/$")({
   server: {
     handlers: {
       GET: async ({ request }) => {
         const url = new URL(request.url);
+        if (url.pathname === issuerDerivedMetadataPath) {
+          const canonicalURL = new URL(request.url);
+          canonicalURL.pathname = canonicalMetadataPath;
+          return auth.handler(new Request(canonicalURL, request));
+        }
         if (url.pathname !== protectedResourcePath) return new Response("Not found", { status: 404 });
         const metadata = await resourceClient.getActions().getProtectedResourceMetadata({
           resource: mcpResourceURL,
