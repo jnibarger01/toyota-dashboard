@@ -34,7 +34,6 @@ import { Route as AppFleetMaintenanceRouteImport } from './routes/_app/fleet/mai
 import { Route as AppFleetSettingsRouteImport } from './routes/_app/fleet/settings'
 import { Route as AppFleetVehiclesRouteImport } from './routes/_app/fleet/vehicles'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as ApiInternalGrokRegistrationRouteImport } from './routes/api/internal/grok-registration'
 
 const SplatRoute = SplatRouteImport.update({
   id: '/$',
@@ -160,12 +159,6 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiInternalGrokRegistrationRoute =
-  ApiInternalGrokRegistrationRouteImport.update({
-    id: '/api/internal/grok-registration',
-    path: '/api/internal/grok-registration',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/$': typeof SplatRoute
@@ -191,7 +184,6 @@ export interface FileRoutesByFullPath {
   '/fleet/settings': typeof AppFleetSettingsRoute
   '/fleet/vehicles': typeof AppFleetVehiclesRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/internal/grok-registration': typeof ApiInternalGrokRegistrationRoute
   '/fleet/': typeof AppFleetIndexRoute
 }
 export interface FileRoutesByTo {
@@ -217,7 +209,6 @@ export interface FileRoutesByTo {
   '/fleet/settings': typeof AppFleetSettingsRoute
   '/fleet/vehicles': typeof AppFleetVehiclesRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/internal/grok-registration': typeof ApiInternalGrokRegistrationRoute
   '/fleet': typeof AppFleetIndexRoute
 }
 export interface FileRoutesById {
@@ -246,7 +237,6 @@ export interface FileRoutesById {
   '/_app/fleet/settings': typeof AppFleetSettingsRoute
   '/_app/fleet/vehicles': typeof AppFleetVehiclesRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/internal/grok-registration': typeof ApiInternalGrokRegistrationRoute
   '/_app/fleet/': typeof AppFleetIndexRoute
 }
 export interface FileRouteTypes {
@@ -275,7 +265,6 @@ export interface FileRouteTypes {
     | '/fleet/settings'
     | '/fleet/vehicles'
     | '/api/auth/$'
-    | '/api/internal/grok-registration'
     | '/fleet/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -301,7 +290,6 @@ export interface FileRouteTypes {
     | '/fleet/settings'
     | '/fleet/vehicles'
     | '/api/auth/$'
-    | '/api/internal/grok-registration'
     | '/fleet'
   id:
     | '__root__'
@@ -329,7 +317,6 @@ export interface FileRouteTypes {
     | '/_app/fleet/settings'
     | '/_app/fleet/vehicles'
     | '/api/auth/$'
-    | '/api/internal/grok-registration'
     | '/_app/fleet/'
   fileRoutesById: FileRoutesById
 }
@@ -340,7 +327,6 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ApiMcpRoute: typeof ApiMcpRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
-  ApiInternalGrokRegistrationRoute: typeof ApiInternalGrokRegistrationRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -520,13 +506,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/internal/grok-registration': {
-      id: '/api/internal/grok-registration'
-      path: '/api/internal/grok-registration'
-      fullPath: '/api/internal/grok-registration'
-      preLoaderRoute: typeof ApiInternalGrokRegistrationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -593,7 +572,6 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ApiMcpRoute: ApiMcpRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
-  ApiInternalGrokRegistrationRoute: ApiInternalGrokRegistrationRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
