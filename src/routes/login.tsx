@@ -31,12 +31,23 @@ function Login() {
     return currentAuthReturnURL(window.location);
   }
 
+  function pendingOAuthQuery(): string | undefined {
+    if (typeof window === "undefined" || !window.location.search) return undefined;
+    return window.location.search.slice(1);
+  }
+
   async function signInWithGoogle(): Promise<void> {
     setBusy(true);
     setError(null);
-    const result = await authClient.signIn.social({
+    const socialSignIn = (authClient.signIn.social as unknown as (input: {
+      provider: "google";
+      callbackURL: string;
+      oauth_query?: string;
+    }) => Promise<{ data?: { url?: string }; error?: { message?: string } }>);
+    const result = await socialSignIn({
       provider: "google",
       callbackURL: authReturnURL(),
+      oauth_query: pendingOAuthQuery(),
     });
     if (result.error) {
       setError(result.error.message ?? "Google sign-in failed");

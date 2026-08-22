@@ -28,6 +28,7 @@ test("login exposes Google social sign-in and preserves the pending OAuth URL", 
   assert.match(login, /signIn\.social/);
   assert.match(login, /provider: "google"/);
   assert.match(login, /pendingOAuthAuthorizationURL/);
+  assert.match(login, /oauth_query/);
   assert.match(await read("src/lib/auth/oauth-return.ts"), /api\/auth\/oauth2\/authorize/);
 });
 
