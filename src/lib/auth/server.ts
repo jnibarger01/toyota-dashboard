@@ -41,6 +41,7 @@ import { ensureDbReady, getPglite } from "../db";
 import { emailAndPasswordEnabled } from "./email-password";
 import { pgliteDialect } from "./pglite-dialect";
 import { PREVIEW_ALLOWED_HOSTS } from "./preview";
+import { getGoogleSocialProviderConfig } from "./google";
 import { SCOPES } from "../mcp/scopes";
 
 // Kick (and share) PGLite bootstrap as soon as the auth server module loads.
@@ -117,6 +118,7 @@ const trustedOrigins: string[] = explicitBaseURL
     ];
 
 const databaseUrl = env("DATABASE_URL");
+const googleSocialProvider = getGoogleSocialProviderConfig();
 
 // Real Postgres when `DATABASE_URL` is set (deployed apps), else the app's
 // embedded PGLite (preview) via a Kysely dialect — so Better Auth persists to the
@@ -135,6 +137,10 @@ export const auth = betterAuth({
   // globalThis so HMR doesn't invalidate PGLite-backed sessions (see above).
   secret: env("BETTER_AUTH_SECRET") ?? previewAuthSecret(),
   database,
+
+  ...(googleSocialProvider
+    ? { socialProviders: { google: googleSocialProvider } }
+    : {}),
 
   // CSRF / origin check for credentialed auth POSTs (email sign-up/sign-in, …).
   // See `trustedOrigins` construction above — must cover live preview hosts AND
