@@ -55,7 +55,7 @@ The canonical production configuration is:
 | Issuer / authorization server | `https://<production-domain>/api/auth` |
 | Authorization endpoint | `https://<production-domain>/api/auth/oauth2/authorize` |
 | Token endpoint | `https://<production-domain>/api/auth/oauth2/token` |
-| Public client registration | `https://<production-domain>/api/auth/oauth2/register` |
+| Public client registration | Operator-only: `DATABASE_URL=... node scripts/register-grok-oauth-client.mjs` |
 | Authorization-server metadata | `https://<production-domain>/api/auth/.well-known/oauth-authorization-server` |
 | Protected-resource metadata | `https://<production-domain>/.well-known/oauth-protected-resource/api/mcp` |
 | Login page | `https://<production-domain>/login` |
@@ -63,15 +63,26 @@ The canonical production configuration is:
 
 `MCP_RESOURCE_URL` must be the exact public HTTPS resource identifier, normally `https://<production-domain>/api/mcp`. Better Auth binds OAuth access tokens to that resource as their audience. The MCP route verifies the JWT signature through Better Auth JWKS, issuer, audience, and expiry before mapping `sub` to an existing Better Auth `user.id`. Per-tool Toyota scope checks and existing `user_id` ownership checks then remain authoritative.
 
-The supported public-client settings are:
+The Grok public-client settings are:
 
 - Authorization Code grant
 - S256 PKCE required
 - `token_endpoint_auth_method=none`
 - No client secret required
-- Scopes: `toyota:read`, `toyota:ro:write`, `toyota:communication:write`, `toyota:followup:write`, `toyota:recommendation:write`
+- Client ID: `grok-toyota-dashboard-public`
+- Client Secret: leave blank; this is a public client
+- Redirect URI: `https://grok.com/connectors-oauth-exchange-code/`
+- Initial scopes: `openid profile toyota:read`
 
-Dynamic client registration is explicitly enabled for compatibility with clients that do not use Client ID Metadata Documents. The registered client still receives resource-bound tokens and must request the exact MCP resource. Better Auth's `cimd()` integration is also enabled for current MCP client discovery.
+Dynamic client registration remains disabled, including unauthenticated registration. The Grok client is registered out of band by the operator script, which writes only a public client record with `authorization_code`, S256 PKCE, `token_endpoint_auth_method=none`, no client secret, the fixed Grok redirect URI, and read-only initial scopes. Better Auth's `cimd()` integration remains enabled for clients that use Client ID Metadata Documents.
+
+Run the operator registration only from a trusted operator environment with production `DATABASE_URL`; it never prints or stores a secret:
+
+```bash
+DATABASE_URL=postgres://... node scripts/register-grok-oauth-client.mjs
+```
+
+The script is deliberately not exposed as an HTTP route and rejects arbitrary redirect URIs. xAI's public documentation describes the Custom MCP connector flow but does not publish the callback; the exact callback above is the observed Grok connector exchange endpoint and is fixed in the registration script.
 
 The required production environment variable is:
 
