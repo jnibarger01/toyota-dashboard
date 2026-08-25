@@ -223,7 +223,7 @@ RO, over real HTTP):
 ## Audit log
 
 Migration `0011_mcp_audit_log.sql` adds `mcp_audit_log`: `id`, `occurred_at`, `user_id`, `token_id`
-(nullable FK to `mcp_api_tokens`, `ON DELETE SET NULL`), `tool_name`, `request_id`, `entity_type`,
+(an opaque static-token id or OAuth credential id), `tool_name`, `request_id`, `entity_type`,
 `entity_id`, `previous_value` (`jsonb`), `new_value` (`jsonb`). `src/lib/mcp/audit.ts`'s
 `recordMcpAudit()` is the only thing that writes to it, called once per successful mutation, from every
 write tool.
@@ -248,6 +248,11 @@ write tool.
   the MCP write-tool layer in the first place (see "Privacy" below).
 - **Not wrapped in the same DB transaction as the mutation itself** — see "Known limitations" for the
   honest reason why, and what the actual failure mode is (narrower than it sounds).
+
+`token_id` is intentionally not a foreign key. Static bearer records use their `mcp_api_tokens.id`; OAuth
+requests use the Better Auth token's `jti` (or a subject/issued-at fallback) with an `oauth:` prefix. This
+keeps both authentication paths attributable without storing access-token plaintext or dropping OAuth audit
+rows on a static-token foreign-key violation. The identifier is not itself an authorization input.
 
 The **existing** `ro_events` audit trail (already written by `RepairOrderRepository`/`FollowUpRepository`
 for every mutation, dashboard or MCP) is reused, not duplicated: every RO-repository write method
@@ -411,9 +416,9 @@ needed) covers, for v0.2 specifically:
   dashboard-shaped call (no `source` passed) still gets `source = 'manual'` — a direct regression check.
 - **Ownership**: cross-user rejection for every entity category (RO, blocker, recommendation, follow-up),
   including confirming the target row is provably unchanged after a rejected cross-user attempt.
-- **Audit**: `recordMcpAudit` writes exactly one row with a correct JSONB round-trip; a foreign-key
-  failure on the insert (simulated with a nonexistent `token_id`) is swallowed, not thrown, and inserts
-  nothing; a full mutate-then-audit sequence produces exactly one row with correct before/after state,
+- **Audit**: `recordMcpAudit` writes exactly one row with a correct JSONB round-trip; an audit database
+  failure is swallowed, not thrown; static-token and OAuth credential identifiers both produce an audit row;
+  a full mutate-then-audit sequence produces exactly one row with correct before/after state,
   and a rejected mutation produces none.
 - **Validation**: malformed UUIDs, invalid enum values (including the "deferred" recommendation status
   that isn't real), missing required fields, and unknown fields (via `z.strictObject`) are all rejected.
@@ -462,7 +467,8 @@ never against live production data.
 ## Deployment
 
 No Vercel configuration changes are required. `npm run build` (`vite build && npm run db:migrate`)
-already applies `migrations/*.sql` — including `0010_mcp_access.sql` and `0011_mcp_audit_log.sql` — to
+already applies `migrations/*.sql` — including `0010_mcp_access.sql`, `0011_mcp_audit_log.sql`, and
+`0013_mcp_audit_oauth_credentials.sql` — to
 `DATABASE_URL` on every deploy, the same as every other migration in this repo. The route is bundled as
 part of the existing Nitro `vercel` preset server function; nothing about the Better Auth routes, static
 assets, or existing API surface changes.

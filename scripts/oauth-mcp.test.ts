@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import { authenticateOAuthClaims } from "../src/lib/mcp/oauth.ts";
 import { checkScope } from "../src/lib/mcp/tool-helpers.ts";
+import { recordMcpAudit } from "../src/lib/mcp/audit.ts";
 
 const RESOURCE = "https://toyota.example.test/api/mcp";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -21,6 +23,9 @@ async function authDb(): Promise<PGlite> {
   const db = new PGlite();
   await db.waitReady;
   await db.exec('create table "user" (id text primary key, name text not null, email text not null, "emailVerified" boolean not null, "createdAt" timestamptz not null default now(), "updatedAt" timestamptz not null default now())');
+  await db.exec(await readFile(new URL("../migrations/0010_mcp_access.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL("../migrations/0011_mcp_audit_log.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL("../migrations/0013_mcp_audit_oauth_credentials.sql", import.meta.url), "utf8"));
   await db.query('insert into "user" (id,name,email,"emailVerified") values ($1,$2,$3,true)', [USER_ID, "OAuth User", "oauth@example.invalid"]);
   return db;
 }
@@ -31,6 +36,26 @@ test("OAuth claims map subject to the existing Better Auth user and preserve sco
   assert.equal(context.userId, USER_ID);
   assert.equal(context.tokenId, "oauth:token-1");
   assert.deepEqual(context.scopes, ["openid", "toyota:read", "toyota:ro:write"]);
+});
+
+test("OAuth mutations retain their credential id in the MCP audit log", async (t) => {
+  const db = await authDb(); t.after(() => db.close());
+  const sql = sqlFor(db);
+  const context = await authenticateOAuthClaims({ sub: USER_ID, aud: RESOURCE, jti: "token-1", scope: "toyota:ro:write" }, sql, RESOURCE);
+
+  await recordMcpAudit(sql, {
+    userId: context.userId,
+    tokenId: context.tokenId,
+    toolName: "update_repair_order_status",
+    requestId: "request-1",
+    entityType: "repair_order",
+    entityId: "ro-1",
+    previousValue: { state: "written" },
+    newValue: { state: "dispatched" },
+  });
+
+  const rows = await db.query<{ token_id: string }>("select token_id from mcp_audit_log");
+  assert.deepEqual(rows.rows, [{ token_id: "oauth:token-1" }]);
 });
 
 test("OAuth claims reject a wrong resource audience", async (t) => {

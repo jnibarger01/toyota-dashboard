@@ -486,14 +486,13 @@ test("recordMcpAudit writes exactly one row with correct fields, including a jso
   });
 });
 
-test("recordMcpAudit never throws and never inserts a partial/fake row when the insert itself fails", async (t) => {
-  const db = await writeDb();
-  t.after(() => db.close());
-  const sql = sqlFor(db);
-  // token_id references mcp_api_tokens(id); this one was never minted, so
-  // the FK constraint rejects the insert — simulating an audit-write failure.
-  await recordMcpAudit(sql, { userId: "advisor-1", tokenId: "does-not-exist", toolName: "add_ro_blocker", requestId: "req-1", entityType: "ro_blocker", entityId: "blocker-1", previousValue: null, newValue: null });
-  assert.equal((await rows(db, "select id from mcp_audit_log")).length, 0);
+test("recordMcpAudit never throws when the insert itself fails", async () => {
+  const failingSql = {
+    query: async () => {
+      throw new Error("simulated audit database failure");
+    },
+  } as unknown as Parameters<typeof recordMcpAudit>[0];
+  await recordMcpAudit(failingSql, { userId: "advisor-1", tokenId: "does-not-exist", toolName: "add_ro_blocker", requestId: "req-1", entityType: "ro_blocker", entityId: "blocker-1", previousValue: null, newValue: null });
 });
 
 test("each successful mutation produces exactly one audit row with correct before/after state, and a rejected mutation produces none", async (t) => {
