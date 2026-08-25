@@ -20,7 +20,7 @@ export function registerSearchRepairOrders(server: McpServer): void {
     {
       title: "Search repair orders",
       description: "Searches the advisor's repair orders by RO number, customer name, or vehicle make/model — a plain substring match over approved fields only, never arbitrary query syntax.",
-      inputSchema: inputShape,
+      inputSchema: z.strictObject(inputShape),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     (args, extra) => {

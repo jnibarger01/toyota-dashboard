@@ -14,7 +14,7 @@ export function registerGetRecommendations(server: McpServer): void {
     {
       title: "Get recommendations",
       description: "Recommended/approved/declined line items for a repair order, with amount and approval state.",
-      inputSchema: inputShape,
+      inputSchema: z.strictObject(inputShape),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     (args, extra) => {

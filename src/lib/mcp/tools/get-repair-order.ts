@@ -19,7 +19,7 @@ export function registerGetRepairOrder(server: McpServer): void {
       title: "Get repair order",
       description:
         "Operational summary for a single repair order: vehicle, status, timestamps, open blockers, recommendations, communication state, and follow-up state. Never returns full customer PII. `version` is included so it can be passed as `expected_version` to the write tools.",
-      inputSchema: inputShape,
+      inputSchema: z.strictObject(inputShape),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       _meta: { ui: { resourceUri: LANE_UI_URI }, "openai/widgetAccessible": true },
     },

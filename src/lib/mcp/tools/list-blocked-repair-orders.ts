@@ -18,7 +18,7 @@ export function registerListBlockedRepairOrders(server: McpServer): void {
     {
       title: "List blocked repair orders",
       description: "Active repair orders with one or more unresolved blockers, and why — answers \"which cars are stuck and why?\".",
-      inputSchema: inputShape,
+      inputSchema: z.strictObject(inputShape),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     (args, extra) => {
