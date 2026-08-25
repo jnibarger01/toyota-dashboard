@@ -21,6 +21,7 @@ import { recordMcpAudit } from "../src/lib/mcp/audit.ts";
 import { RepairOrderRepository } from "../src/lib/ro-repository.server.ts";
 import { FollowUpRepository } from "../src/lib/follow-up-repository.server.ts";
 import { WORKFLOW_STATES, BLOCKER_TYPES } from "../src/lib/ro-domain.ts";
+import { FOLLOW_UP_OUTCOMES } from "../src/lib/mcp/domain-constants.ts";
 
 // --- privacy.ts --------------------------------------------------------
 
@@ -557,6 +558,35 @@ test("search query input validation rejects empty and oversized queries", () => 
   assert.equal(schema.safeParse({ query: "" }).success, false);
   assert.equal(schema.safeParse({ query: "  " }).success, false);
   assert.equal(schema.safeParse({ query: "x".repeat(101) }).success, false);
+});
+
+test("read-only MCP input schemas reject unknown fields", async () => {
+  const toolSources = [
+    "search-repair-orders.ts",
+    "list-blocked-repair-orders.ts",
+    "get-repair-order.ts",
+    "list-follow-ups.ts",
+    "list-repair-orders.ts",
+    "get-recommendations.ts",
+  ];
+  for (const source of toolSources) {
+    const text = await readFile(new URL(`../src/lib/mcp/tools/${source}`, import.meta.url), "utf8");
+    assert.match(text, /inputSchema:\s*z\.strictObject\(inputShape\)/, `${source} registers a strict input schema`);
+  }
+
+  const schemas = [
+    ["search_repair_orders", z.strictObject({ query: z.string().trim().min(1).max(100), limit: z.number().int().min(1).max(25).optional() }), { query: "10482" }],
+    ["list_blocked_repair_orders", z.strictObject({ limit: z.number().int().min(1).max(50).optional() }), {}],
+    ["get_repair_order", z.strictObject({ ro_id: z.string().trim().min(1).max(120) }), { ro_id: "ro-1" }],
+    ["list_follow_ups", z.strictObject({ due_before: z.string().datetime().optional(), status: z.enum(FOLLOW_UP_OUTCOMES).optional(), limit: z.number().int().min(1).max(50).optional() }), {}],
+    ["list_repair_orders", z.strictObject({ status: z.enum(WORKFLOW_STATES).optional(), limit: z.number().int().min(1).max(50).optional() }), {}],
+    ["get_recommendations", z.strictObject({ ro_id: z.string().trim().min(1).max(120) }), { ro_id: "ro-1" }],
+  ] as const;
+
+  for (const [toolName, schema, validInput] of schemas) {
+    assert.equal(schema.safeParse(validInput).success, true, `${toolName} accepts its valid input`);
+    assert.equal(schema.safeParse({ ...validInput, field_the_model_invented: true }).success, false, `${toolName} rejects unknown fields`);
+  }
 });
 
 test("write-tool input validation: malformed ids, invalid enums, and unknown fields are all rejected (z.strictObject)", () => {
