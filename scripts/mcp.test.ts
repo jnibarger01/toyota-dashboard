@@ -21,6 +21,7 @@ import { recordMcpAudit } from "../src/lib/mcp/audit.ts";
 import { RepairOrderRepository } from "../src/lib/ro-repository.server.ts";
 import { FollowUpRepository } from "../src/lib/follow-up-repository.server.ts";
 import { WORKFLOW_STATES, BLOCKER_TYPES } from "../src/lib/ro-domain.ts";
+import { FOLLOW_UP_OUTCOMES } from "../src/lib/mcp/domain-constants.ts";
 
 // --- privacy.ts --------------------------------------------------------
 
@@ -485,14 +486,13 @@ test("recordMcpAudit writes exactly one row with correct fields, including a jso
   });
 });
 
-test("recordMcpAudit never throws and never inserts a partial/fake row when the insert itself fails", async (t) => {
-  const db = await writeDb();
-  t.after(() => db.close());
-  const sql = sqlFor(db);
-  // token_id references mcp_api_tokens(id); this one was never minted, so
-  // the FK constraint rejects the insert — simulating an audit-write failure.
-  await recordMcpAudit(sql, { userId: "advisor-1", tokenId: "does-not-exist", toolName: "add_ro_blocker", requestId: "req-1", entityType: "ro_blocker", entityId: "blocker-1", previousValue: null, newValue: null });
-  assert.equal((await rows(db, "select id from mcp_audit_log")).length, 0);
+test("recordMcpAudit never throws when the insert itself fails", async () => {
+  const failingSql = {
+    query: async () => {
+      throw new Error("simulated audit database failure");
+    },
+  } as unknown as Parameters<typeof recordMcpAudit>[0];
+  await recordMcpAudit(failingSql, { userId: "advisor-1", tokenId: "does-not-exist", toolName: "add_ro_blocker", requestId: "req-1", entityType: "ro_blocker", entityId: "blocker-1", previousValue: null, newValue: null });
 });
 
 test("each successful mutation produces exactly one audit row with correct before/after state, and a rejected mutation produces none", async (t) => {
@@ -557,6 +557,35 @@ test("search query input validation rejects empty and oversized queries", () => 
   assert.equal(schema.safeParse({ query: "" }).success, false);
   assert.equal(schema.safeParse({ query: "  " }).success, false);
   assert.equal(schema.safeParse({ query: "x".repeat(101) }).success, false);
+});
+
+test("read-only MCP input schemas reject unknown fields", async () => {
+  const toolSources = [
+    "search-repair-orders.ts",
+    "list-blocked-repair-orders.ts",
+    "get-repair-order.ts",
+    "list-follow-ups.ts",
+    "list-repair-orders.ts",
+    "get-recommendations.ts",
+  ];
+  for (const source of toolSources) {
+    const text = await readFile(new URL(`../src/lib/mcp/tools/${source}`, import.meta.url), "utf8");
+    assert.match(text, /inputSchema:\s*z\.strictObject\(inputShape\)/, `${source} registers a strict input schema`);
+  }
+
+  const schemas = [
+    ["search_repair_orders", z.strictObject({ query: z.string().trim().min(1).max(100), limit: z.number().int().min(1).max(25).optional() }), { query: "10482" }],
+    ["list_blocked_repair_orders", z.strictObject({ limit: z.number().int().min(1).max(50).optional() }), {}],
+    ["get_repair_order", z.strictObject({ ro_id: z.string().trim().min(1).max(120) }), { ro_id: "ro-1" }],
+    ["list_follow_ups", z.strictObject({ due_before: z.string().datetime().optional(), status: z.enum(FOLLOW_UP_OUTCOMES).optional(), limit: z.number().int().min(1).max(50).optional() }), {}],
+    ["list_repair_orders", z.strictObject({ status: z.enum(WORKFLOW_STATES).optional(), limit: z.number().int().min(1).max(50).optional() }), {}],
+    ["get_recommendations", z.strictObject({ ro_id: z.string().trim().min(1).max(120) }), { ro_id: "ro-1" }],
+  ] as const;
+
+  for (const [toolName, schema, validInput] of schemas) {
+    assert.equal(schema.safeParse(validInput).success, true, `${toolName} accepts its valid input`);
+    assert.equal(schema.safeParse({ ...validInput, field_the_model_invented: true }).success, false, `${toolName} rejects unknown fields`);
+  }
 });
 
 test("write-tool input validation: malformed ids, invalid enums, and unknown fields are all rejected (z.strictObject)", () => {

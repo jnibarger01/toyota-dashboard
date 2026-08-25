@@ -23,7 +23,7 @@ export function registerListFollowUps(server: McpServer): void {
     {
       title: "List follow-ups",
       description: "Lists the advisor's follow-ups, optionally filtered by due date and/or outcome — answers \"who needs a follow-up today?\".",
-      inputSchema: inputShape,
+      inputSchema: z.strictObject(inputShape),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     (args, extra) => {

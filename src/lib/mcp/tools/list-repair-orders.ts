@@ -20,7 +20,7 @@ export function registerListRepairOrders(server: McpServer): void {
     {
       title: "List repair orders",
       description: "Lists the authenticated advisor's active repair orders, optionally filtered to one workflow state. Bounded, deterministically ordered, and PII-minimized.",
-      inputSchema: inputShape,
+      inputSchema: z.strictObject(inputShape),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     (args, extra) => {
