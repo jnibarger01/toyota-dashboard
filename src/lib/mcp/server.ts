@@ -4,6 +4,7 @@ import { registerListRepairOrders } from "./tools/list-repair-orders";
 import { registerGetRepairOrder } from "./tools/get-repair-order";
 import { registerListBlockedRepairOrders } from "./tools/list-blocked-repair-orders";
 import { registerListFollowUps } from "./tools/list-follow-ups";
+import { registerGetFollowUpTriage } from "./tools/get-follow-up-triage";
 import { registerGetRecommendations } from "./tools/get-recommendations";
 import { registerSearchRepairOrders } from "./tools/search-repair-orders";
 import { registerCreateFollowUp } from "./tools/create-follow-up";
@@ -44,6 +45,7 @@ export function createMcpServer(): McpServer {
   registerGetRepairOrder(server);
   registerListBlockedRepairOrders(server);
   registerListFollowUps(server);
+  registerGetFollowUpTriage(server);
   registerGetRecommendations(server);
   registerSearchRepairOrders(server);
 

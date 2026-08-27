@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/components/now";
 import { deriveFollowUps } from "@/lib/follow-ups";
+import { buildFollowUpTriage } from "@/lib/follow-up-triage";
 import { useAppStore } from "@/lib/store";
 import { uid } from "@/lib/utils";
 import { createServiceFollowUp, getServiceFollowUps, setServiceFollowUpOutcome } from "@/lib/follow-up-server";
@@ -11,7 +12,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { usd } from "@/lib/format";
 import type { FollowUpReason } from "@/lib/types";
 
-type FollowUpView = "queue" | "due_today" | "overdue" | "upcoming" | "high_value" | "completed";
+type FollowUpView = "triage" | "queue" | "due_today" | "overdue" | "upcoming" | "high_value" | "completed";
 
 export const Route = createFileRoute("/_app/follow-ups")({ component: FollowUpsPage });
 
@@ -26,9 +27,10 @@ function FollowUpsPage() {
   const { user } = useCurrentUserState();
   const now = useNow();
   const queue = deriveFollowUps(ros, followUps, settings, now);
+  const triage = buildFollowUpTriage(followUps, ros, now, settings);
   const [error, setError] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [view, setView] = useState<FollowUpView>("queue");
+  const [view, setView] = useState<FollowUpView>("triage");
   const [manualRoId, setManualRoId] = useState("");
   const [manualReason, setManualReason] = useState<FollowUpReason>("customer_callback");
   const [manualLabel, setManualLabel] = useState("");
@@ -106,9 +108,9 @@ function FollowUpsPage() {
         <p className="text-sm text-muted">{queue.length} in queue — approvals, ready vehicles, overdue updates.</p>
       </div>
       <NativeSelect aria-label="Follow-up view" className="h-9 w-full max-w-xs bg-elevated" value={view} onChange={(event) => setView(event.target.value as FollowUpView)}>
-        <option value="queue">Active queue</option><option value="due_today">Due today</option><option value="overdue">Overdue</option><option value="upcoming">Upcoming</option><option value="high_value">High value</option><option value="completed">Completed</option>
+        <option value="triage">Priority triage board</option><option value="queue">Active queue</option><option value="due_today">Due today</option><option value="overdue">Overdue</option><option value="upcoming">Upcoming</option><option value="high_value">High value</option><option value="completed">Completed</option>
       </NativeSelect>
-      {view === "queue" ? <ul className="space-y-2">
+      {view === "triage" ? <div className="grid gap-3 xl:grid-cols-4">{triage.map((group) => <section key={group.key} aria-labelledby={`follow-up-${group.key}`} className="min-w-0 rounded-xl bg-elevated p-3 shadow-[var(--shadow-border)]"><div className="mb-2 flex items-center justify-between"><h2 id={`follow-up-${group.key}`} className="text-sm font-semibold">{group.label}</h2><span className="text-xs text-muted">{group.items.length}</span></div><ul className="space-y-2">{group.items.map(({ followUp, ro, priority }) => <li key={followUp.id} className="rounded-lg bg-surface p-3"><button type="button" className="w-full text-left" onClick={() => selectRo(ro.id)}><div className="font-medium">{ro.customerName}</div><div className="text-sm text-muted">{followUp.label}</div><div className="mt-2 flex justify-between text-xs text-muted"><span>{followUp.callbackAt ? new Date(followUp.callbackAt).toLocaleString() : "No due date"}</span><span>Priority {priority}</span></div></button></li>)}</ul>{group.items.length === 0 ? <p className="py-3 text-xs text-muted">Nothing here.</p> : null}</section>)}</div> : view === "queue" ? <ul className="space-y-2">
         {queue.map((item) => {
           return (
             <li key={item.key} className="flex flex-wrap items-center gap-3 rounded-xl bg-elevated px-4 py-3 shadow-[var(--shadow-border)]">
@@ -143,7 +145,7 @@ function FollowUpsPage() {
       })}</ul>}
       {error ? <p className="text-sm text-accent">{error}</p> : null}
       {view === "queue" && queue.length === 0 ? <p className="text-sm text-muted">Queue is clear.</p> : null}
-      {view !== "queue" && savedView.length === 0 ? <p className="text-sm text-muted">No follow-ups in this view.</p> : null}
+      {view !== "queue" && view !== "triage" && savedView.length === 0 ? <p className="text-sm text-muted">No follow-ups in this view.</p> : null}
       <details className="rounded-xl bg-elevated p-4 shadow-[var(--shadow-border)]">
         <summary className="cursor-pointer text-sm font-medium">Add follow-up</summary>
         <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={createManual}>

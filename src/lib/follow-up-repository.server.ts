@@ -20,7 +20,7 @@ export class FollowUpRepository {
   }
 
   async list(userId: string): Promise<FollowUp[]> {
-    const rows = await this.sql.query<FollowUpRow>("select id, ro_id, reason, label, outcome, due_at, estimated_opportunity, note, created_manually, created_at from service_follow_ups where user_id = $1 order by due_at nulls last, created_at desc", [userId]);
+    const rows = await this.sql.query<FollowUpRow>("select id, ro_id, reason, label, outcome, due_at, estimated_opportunity, note, created_manually, created_at from service_follow_ups where user_id = $1 order by due_at nulls last, created_at desc, id asc", [userId]);
     return rows.map(mapRow);
   }
 

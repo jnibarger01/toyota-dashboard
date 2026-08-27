@@ -17,7 +17,7 @@ MCP client
 /api/mcp  (TanStack Start route, Streamable HTTP, stateless)
    │
    ├── READ   get_lane_summary, list_repair_orders, get_repair_order,
-   │          list_blocked_repair_orders, list_follow_ups,
+   │          list_blocked_repair_orders, list_follow_ups, get_follow_up_triage,
    │          get_recommendations, search_repair_orders
    │
    └── WRITE  create_repair_order, update_repair_order, update_repair_order_status,
@@ -118,7 +118,7 @@ RO status or recommendations:
 
 | Scope | Grants |
 | --- | --- |
-| `toyota:read` | All 7 read tools |
+| `toyota:read` | All read tools |
 | `toyota:ro:write` | `create_repair_order`, `update_repair_order`, `update_repair_order_status`, `update_repair_order_notes`, `close_repair_order`, `assign_repair_order`, `add_ro_blocker`, `resolve_ro_blocker` |
 | `toyota:communication:write` | `add_ro_communication` |
 | `toyota:followup:write` | `create_follow_up`, `complete_follow_up` |
@@ -155,7 +155,8 @@ All require `toyota:read`. Annotated `readOnlyHint: true`.
 | `list_repair_orders` | Lists active ROs, optional `status` filter (one `WorkflowState`), `limit` (default 20, max 50). |
 | `get_repair_order` | Full operational summary for one RO by `ro_id` (accepts either the internal id or the human RO number): status, timestamps, open blockers, recommendations, communication state, follow-up state, and `version` (needed by the write tools' `expected_version`). |
 | `list_blocked_repair_orders` | Active ROs with ≥1 unresolved blocker, with why — "which cars are stuck and why?" |
-| `list_follow_ups` | Follow-ups, optional `due_before` (ISO datetime) and `status` filters, `limit` (default 20, max 50). |
+| `list_follow_ups` | Follow-ups, optional `due_before` (ISO datetime) and `status` filters, bounded `limit` (default 20, max 50) and `offset` (default 0, max 10,000). Returns `total`, `returned`, `hasMore`, and `nextOffset`; ordering is deterministic for repeatable pagination. |
+| `get_follow_up_triage` | User-scoped follow-up board grouped as `overdue`, `due`, `open`, and `completed`, with existing RO priority scores and deterministic tie-breakers. |
 | `get_recommendations` | Recommendation line items for one RO by `ro_id`, with amount/approval state. |
 | `search_repair_orders` | Substring match over RO number / customer name / vehicle make+model only (`query`, `limit` default 10 max 25) — no wildcard/SQL syntax accepted; the term is LIKE-escaped before it reaches SQL. |
 
