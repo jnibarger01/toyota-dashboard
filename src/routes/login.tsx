@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { authClient, authEnabled, signIn, signInWithPassword } from "@/lib/auth/client";
+import { authClient, authEnabled, signInWithPassword } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pendingOAuthAuthorizationURL, currentAuthReturnURL } from "@/lib/auth/oauth-return";
@@ -78,22 +78,32 @@ function Login() {
   // (VITE_JACE_AUTH_ENABLED); dual-run with the direct Google button. Rollback:
   // set VITE_JACE_AUTH_ENABLED=false (button hidden) and/or
   // JACE_AUTH_ENABLED=false on the server (provider unregistered) — see
-  // `src/lib/auth/jace.ts`.
+  // `src/lib/auth/jace.ts`. better-auth 1.7 exposes genericOAuth providers
+  // through the standard social sign-in endpoint (callback
+  // `/api/auth/callback/jace`).
   const jaceAuthEnabled = import.meta.env.VITE_JACE_AUTH_ENABLED === "true";
 
   async function signInWithJace(): Promise<void> {
     setBusy(true);
     setError(null);
-    try {
-      await signIn("jace", {
-        callbackURL: pendingAuthorizationURL ? authReturnURL() : "/",
-      });
-      // `signIn` navigates away on success; reaching here means it failed to
-      // produce a redirect.
-      setError("jace-auth sign-in did not return a redirect");
+    const socialSignIn = (authClient.signIn.social as unknown as (input: {
+      provider: "jace";
+      callbackURL: string;
+      oauth_query?: string;
+    }) => Promise<{ data?: { url?: string }; error?: { message?: string } }>);
+    const result = await socialSignIn({
+      provider: "jace",
+      callbackURL: authReturnURL(),
+      oauth_query: pendingOAuthQuery(),
+    });
+    if (result.error) {
+      setError(result.error.message ?? "jace-auth sign-in failed");
       setBusy(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "jace-auth sign-in failed");
+      return;
+    }
+    if (result.data?.url) window.location.assign(result.data.url);
+    else {
+      setError("jace-auth sign-in did not return a redirect");
       setBusy(false);
     }
   }

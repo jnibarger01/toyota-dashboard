@@ -17,7 +17,8 @@ VITE_JACE_AUTH_ENABLED=true                     # shows the sign-in button
 ```
 
 jace-auth side: the `toyota-dashboard` managed client must allow the exact
-redirect `https://<this-app-host>/api/auth/oauth2/callback/jace`
+redirect `https://<this-app-host>/api/auth/callback/jace` (better-auth 1.7
+routes genericOAuth providers through the core social callback path).
 (`JACE_CLIENT_TOYOTA_DASHBOARD_REDIRECT_URIS`) and, if overriding audiences,
 `JACE_RESOURCE_TOYOTA_DASHBOARD` must equal the dashboard's
 `JACE_AUTH_RESOURCE` (audience equality).
