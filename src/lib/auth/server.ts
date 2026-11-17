@@ -29,7 +29,7 @@
  * a verified id via `@/lib/auth/middleware`.
  */
 import { betterAuth } from "better-auth";
-import { bearer, jwt } from "better-auth/plugins";
+import { bearer, genericOAuth, jwt } from "better-auth/plugins";
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { mcp } from "@better-auth/mcp";
@@ -42,6 +42,7 @@ import { emailAndPasswordEnabled } from "./email-password";
 import { pgliteDialect } from "./pglite-dialect";
 import { PREVIEW_ALLOWED_HOSTS } from "./preview";
 import { getGoogleSocialProviderConfig } from "./google";
+import { getJaceAuthConfig } from "./jace";
 import { SCOPES } from "../mcp/scopes";
 
 // Kick (and share) PGLite bootstrap as soon as the auth server module loads.
@@ -119,6 +120,9 @@ const trustedOrigins: string[] = explicitBaseURL
 
 const databaseUrl = env("DATABASE_URL");
 const googleSocialProvider = getGoogleSocialProviderConfig();
+// Central-issuer (jace-auth) sign-in — dual-run beside the direct Google
+// provider. `null` when env is missing or `JACE_AUTH_ENABLED=false` (rollback).
+const jaceOAuth = getJaceAuthConfig();
 
 // Real Postgres when `DATABASE_URL` is set (deployed apps), else the app's
 // embedded PGLite (preview) via a Kysely dialect — so Better Auth persists to the
@@ -140,6 +144,14 @@ export const auth = betterAuth({
 
   ...(googleSocialProvider
     ? { socialProviders: { google: googleSocialProvider } }
+    : {}),
+
+  // Account continuity for the central-issuer migration: the first jace-auth
+  // sign-in links to the existing local user with the same verified email
+  // (sub → user.id mapping without a separate link table). Google is listed
+  // too so both paths may claim the same local identity.
+  ...(jaceOAuth
+    ? { account: { accountLinking: { enabled: true, trustedProviders: ["google", jaceOAuth.providerId] } } }
     : {}),
 
   // CSRF / origin check for credentialed auth POSTs (email sign-up/sign-in, …).
@@ -175,6 +187,33 @@ export const auth = betterAuth({
   },
 
   plugins: [
+    // Central-issuer sign-in (jace-auth) via OIDC discovery + code flow. The
+    // provider id "jace" is also the callback path segment:
+    // `/api/auth/oauth2/callback/jace` — that exact URL is the redirect URI
+    // registered on the jace-auth `toyota-dashboard` client. `resource` sends
+    // the RFC 8707 audience so jace-auth mints tokens for this app
+    // (audience equality with jace-auth's `JACE_RESOURCE_TOYOTA_DASHBOARD`).
+    // Added ALONGSIDE the direct Google social provider (dual-run / rollback:
+    // `JACE_AUTH_ENABLED=false` removes it, see `./jace.ts`).
+    ...(jaceOAuth
+      ? [
+          genericOAuth({
+            config: [
+              {
+                providerId: jaceOAuth.providerId,
+                clientId: jaceOAuth.clientId,
+                clientSecret: jaceOAuth.clientSecret,
+                discoveryUrl: `${jaceOAuth.issuer}/.well-known/openid-configuration`,
+                scopes: ["openid", "profile", "email"],
+                prompt: "select_account",
+                pkce: true,
+                authorizationUrlParams: { resource: jaceOAuth.resource },
+              },
+            ],
+          }),
+        ]
+      : []),
+
     // Accept `Authorization: Bearer <session-token>` as an alternative to the
     // cookie. Needed for the LIVE PREVIEW: the app runs in an embedded iframe
     // where cookies are partitioned, so after popup sign-in it authenticates with

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { authClient, authEnabled, signInWithPassword } from "@/lib/auth/client";
+import { authClient, authEnabled, signIn, signInWithPassword } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { pendingOAuthAuthorizationURL, currentAuthReturnURL } from "@/lib/auth/oauth-return";
@@ -74,6 +74,30 @@ function Login() {
     }
   }
 
+  // Central-issuer (jace-auth) sign-in. Shown only when the deployer opted in
+  // (VITE_JACE_AUTH_ENABLED); dual-run with the direct Google button. Rollback:
+  // set VITE_JACE_AUTH_ENABLED=false (button hidden) and/or
+  // JACE_AUTH_ENABLED=false on the server (provider unregistered) — see
+  // `src/lib/auth/jace.ts`.
+  const jaceAuthEnabled = import.meta.env.VITE_JACE_AUTH_ENABLED === "true";
+
+  async function signInWithJace(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await signIn("jace", {
+        callbackURL: pendingAuthorizationURL ? authReturnURL() : "/",
+      });
+      // `signIn` navigates away on success; reaching here means it failed to
+      // produce a redirect.
+      setError("jace-auth sign-in did not return a redirect");
+      setBusy(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "jace-auth sign-in failed");
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="grid min-h-dvh place-items-center bg-bg px-6">
       <div className="w-full max-w-sm rounded-xl bg-elevated p-6 shadow-[var(--shadow-border)]">
@@ -91,6 +115,11 @@ function Login() {
             <Button type="button" className="w-full" disabled={busy} onClick={() => void signInWithGoogle()}>
               {busy ? "Connecting…" : "Continue with Google"}
             </Button>
+            {jaceAuthEnabled ? (
+              <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => void signInWithJace()}>
+                {busy ? "Connecting…" : "Continue with jace-auth"}
+              </Button>
+            ) : null}
             <div className="flex items-center gap-3 text-xs text-muted">
               <span className="h-px flex-1 bg-border" />
               <span>or use email</span>
