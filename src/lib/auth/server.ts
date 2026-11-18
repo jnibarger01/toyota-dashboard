@@ -205,8 +205,13 @@ export const auth = betterAuth({
                 clientSecret: jaceOAuth.clientSecret,
                 discoveryUrl: `${jaceOAuth.issuer}/.well-known/openid-configuration`,
                 scopes: ["openid", "profile", "email"],
-                prompt: "select_account",
+                // No `prompt` — jace-auth's OAuth provider rejects
+                // prompt=select_account (unsupported_prompt_select_account).
                 pkce: true,
+                // jace-auth registers confidential clients for HTTP Basic
+                // client auth; Better Auth's default is client_secret_post,
+                // which the issuer rejects with invalid_client.
+                tokenEndpointAuth: { method: "client_secret_basic" },
                 authorizationUrlParams: { resource: jaceOAuth.resource },
               },
             ],
