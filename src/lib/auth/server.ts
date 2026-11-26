@@ -122,7 +122,7 @@ const databaseUrl = env("DATABASE_URL");
 const googleSocialProvider = getGoogleSocialProviderConfig();
 // Central-issuer (jace-auth) sign-in — dual-run beside the direct Google
 // provider. `null` when env is missing or `JACE_AUTH_ENABLED=false` (rollback).
-const jaceOAuth = getJaceAuthConfig();
+export const jaceOAuth = getJaceAuthConfig();
 
 // Real Postgres when `DATABASE_URL` is set (deployed apps), else the app's
 // embedded PGLite (preview) via a Kysely dialect — so Better Auth persists to the
@@ -159,11 +159,9 @@ export const auth = betterAuth({
   // local loopback variants, or clients get "Invalid origin".
   trustedOrigins,
 
-  // Cache the session in the short-lived signed `session_data` cookie so reads
-  // (incl. the client's `/get-session`) skip the DB — this shrinks the "loading"
-  // window and reduces auth flicker. See the `auth` skill for the full
-  // flicker-prevention guidance (gate on `isPending`; SSR the session).
-  session: { cookieCache: { enabled: true, maxAge: 300 } },
+  // Disable cookieCache so sign-out and session revocation take effect
+  // immediately against the database (no 300-second signed-cookie replay window).
+  session: { cookieCache: { enabled: false } },
 
   // Local email/password — toggled only via `./email-password` (not a plugin).
   ...(emailAndPasswordEnabled ? { emailAndPassword: { enabled: true, disableSignUp: true } } : {}),
@@ -187,12 +185,12 @@ export const auth = betterAuth({
   },
 
   plugins: [
-    // Central-issuer sign-in (jace-auth) via OIDC discovery + code flow. The
-    // provider id "jace" is also the callback path segment:
-    // `/api/auth/oauth2/callback/jace` — that exact URL is the redirect URI
-    // registered on the jace-auth `toyota-dashboard` client. `resource` sends
-    // the RFC 8707 audience so jace-auth mints tokens for this app
-    // (audience equality with jace-auth's `JACE_RESOURCE_TOYOTA_DASHBOARD`).
+    // Central-issuer sign-in (jace-auth) via OIDC discovery + code flow.
+    // Better Auth 1.7 routes `genericOAuth` providers through the social
+    // callback path `/api/auth/callback/jace` — that exact URL must be
+    // registered in `JACE_CLIENT_TOYOTA_DASHBOARD_REDIRECT_URIS` on jace-auth.
+    // `resource` sends the RFC 8707 audience so jace-auth mints tokens for this
+    // app (audience equality with jace-auth's `JACE_RESOURCE_TOYOTA_DASHBOARD`).
     // Added ALONGSIDE the direct Google social provider (dual-run / rollback:
     // `JACE_AUTH_ENABLED=false` removes it, see `./jace.ts`).
     ...(jaceOAuth

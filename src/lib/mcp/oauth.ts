@@ -4,15 +4,19 @@ import { getBetterAuthUserId } from "../auth/oauth-user.server.ts";
 
 
 /**
- * Converts a Better Auth OAuth access-token claim set into the same ownership
+ * Converts a verified OAuth access-token claim set into the same ownership
  * context used by static MCP bearer tokens. `requireMcpAuth` has already
  * verified signature, issuer, audience, and expiry before this function runs;
  * this function adds the application-level user existence boundary.
+ *
+ * When `opts.providerId` is set (e.g. `"jace"` for central jace-auth tokens),
+ * `sub` is resolved through the linked `"account"` record for that provider.
  */
 export async function authenticateOAuthClaims(
   claims: Record<string, unknown>,
   sql: Sql,
   expectedResource: string,
+  opts?: { providerId?: string },
 ): Promise<McpAuthContext> {
   const subject = claims.sub;
   if (typeof subject !== "string" || !subject) {
@@ -25,7 +29,7 @@ export async function authenticateOAuthClaims(
     throw new McpHttpError("OAuth access token has the wrong resource audience", 401);
   }
 
-  const userId = await getBetterAuthUserId(sql, subject);
+  const userId = await getBetterAuthUserId(sql, subject, opts?.providerId);
   if (!userId) throw new McpHttpError("OAuth subject is not a Toyota Dashboard user", 401);
 
   const scopeClaim = claims.scope;

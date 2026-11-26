@@ -210,12 +210,38 @@ function waitForPopupToken(popup: Window): Promise<string | null> {
   });
 }
 
-/** Sign out of THIS app's local session, clear the preview token, then redirect. */
+/**
+ * Sign out of THIS app's local session, clear the preview token, then redirect.
+ * When signed in via central jace-auth, also redirects through jace-auth's
+ * OIDC RP-Initiated Logout (`/oauth2/end-session`) so the central session is
+ * terminated cleanly while preserving direct Google and local email/password sign-out.
+ */
 export async function signOut(redirectTo = "/"): Promise<void> {
+  let endSessionUrl: string | null = null;
+  try {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    const token = getBearerToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch("/api/auth/jace-logout", {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: JSON.stringify({ redirectTo }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { endSessionUrl?: unknown };
+      if (typeof data.endSessionUrl === "string" && data.endSessionUrl) {
+        endSessionUrl = data.endSessionUrl;
+      }
+    }
+  } catch {
+    // Never block local sign-out if RP-initiated logout lookup fails.
+  }
+
   try {
     await authClient.signOut();
   } finally {
     setBearerToken(null);
   }
-  window.location.href = redirectTo;
+  window.location.href = endSessionUrl ?? redirectTo;
 }

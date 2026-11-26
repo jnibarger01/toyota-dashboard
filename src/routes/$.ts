@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
-import { auth, authIssuerURL, mcpResourceURL } from "@/lib/auth/server";
+import { auth, authIssuerURL, jaceOAuth, mcpResourceURL } from "@/lib/auth/server";
+import { getMcpAuthorizationServers } from "@/lib/auth/jace";
 import { SCOPES } from "@/lib/mcp/scopes";
 
 const resourceClient = oauthProviderResourceClient(auth);
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/$")({
         if (url.pathname !== protectedResourcePath) return new Response("Not found", { status: 404 });
         const metadata = await resourceClient.getActions().getProtectedResourceMetadata({
           resource: mcpResourceURL,
-          authorization_servers: [authIssuerURL],
+          authorization_servers: getMcpAuthorizationServers(authIssuerURL, jaceOAuth),
           scopes_supported: [
             SCOPES.READ,
             SCOPES.RO_WRITE,
