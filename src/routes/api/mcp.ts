@@ -4,7 +4,8 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { authenticateMcpRequest, McpHttpError, type McpAuthContext } from "@/lib/mcp/auth";
 import { authenticateOAuthClaims } from "@/lib/mcp/oauth";
 import { createMcpServer } from "@/lib/mcp/server";
-import { auth, authIssuerURL, mcpResourceURL } from "@/lib/auth/server";
+import { auth, authIssuerURL, jaceOAuth, mcpResourceURL } from "@/lib/auth/server";
+import { shouldUseJaceMcpVerifier } from "@/lib/auth/jace";
 
 function hasStaticBearer(request: Request): boolean {
   return /^Bearer\s+toyota_mcp_/i.test(request.headers.get("authorization")?.trim() ?? "");
@@ -28,7 +29,7 @@ async function handleAuthenticatedMcpRequest(request: Request, authContext: McpA
   });
 }
 
-const oauthMcpHandler = requireMcpAuth(
+const localOAuthMcpHandler = requireMcpAuth(
   auth,
   async (request, claims) => {
     const sql = await (await import("@/lib/db")).getSql();
@@ -42,13 +43,40 @@ const oauthMcpHandler = requireMcpAuth(
   },
 );
 
+const jaceOAuthMcpHandler = jaceOAuth
+  ? (() => {
+      const { issuer, jwksUrl, mcpResource, providerId } = jaceOAuth;
+      return requireMcpAuth(
+        auth,
+        async (request, claims) => {
+          const sql = await (await import("@/lib/db")).getSql();
+          const authContext = await authenticateOAuthClaims(
+            claims as Record<string, unknown>,
+            sql,
+            mcpResource,
+            { providerId },
+          );
+          return handleAuthenticatedMcpRequest(request, authContext);
+        },
+        {
+          resource: mcpResource,
+          issuer,
+          jwksUrl,
+        },
+      );
+    })()
+  : null;
+
 async function handleMcpRequest(request: Request): Promise<Response> {
   try {
     if (hasStaticBearer(request)) {
       const authContext = await authenticateMcpRequest(request);
       return await handleAuthenticatedMcpRequest(request, authContext);
     }
-    return await oauthMcpHandler(request);
+    if (jaceOAuthMcpHandler && shouldUseJaceMcpVerifier(request.headers.get("authorization"), jaceOAuth)) {
+      return await jaceOAuthMcpHandler(request);
+    }
+    return await localOAuthMcpHandler(request);
   } catch (err) {
     if (err instanceof McpHttpError) {
       const headers: Record<string, string> = { "content-type": "application/json" };
