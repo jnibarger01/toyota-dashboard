@@ -52,7 +52,10 @@ through `/api/auth/callback/<providerId>`):
 When jace-auth is enabled:
 
 - `/.well-known/oauth-protected-resource/api/mcp` advertises `jace-auth`
-  alongside the local Toyota issuer in `authorization_servers`.
+  alongside the local Toyota issuer only when `JACE_AUTH_MCP_RESOURCE` equals
+  `MCP_RESOURCE_URL` exactly. Configure that same resource on jace-auth before
+  enabling discovery. A mismatch leaves the local issuer discoverable while
+  avoiding advertising a central issuer that cannot serve the requested audience.
 - `POST /api/mcp` verifies Bearer JWTs issued by `jace-auth` against
   `<JACE_AUTH_ISSUER>/jwks`, `JACE_AUTH_ISSUER`, and `JACE_AUTH_MCP_RESOURCE`,
   mapping `sub` through the linked `"account"` (`providerId = 'jace'`) to the

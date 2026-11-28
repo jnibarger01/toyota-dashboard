@@ -22,7 +22,7 @@ export const Route = createFileRoute("/$")({
         if (url.pathname !== protectedResourcePath) return new Response("Not found", { status: 404 });
         const metadata = await resourceClient.getActions().getProtectedResourceMetadata({
           resource: mcpResourceURL,
-          authorization_servers: getMcpAuthorizationServers(authIssuerURL, jaceOAuth),
+          authorization_servers: getMcpAuthorizationServers(authIssuerURL, jaceOAuth, mcpResourceURL),
           scopes_supported: [
             SCOPES.READ,
             SCOPES.RO_WRITE,

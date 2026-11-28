@@ -265,14 +265,17 @@ test("client signOut and /api/auth/$ route wire RP-initiated logout safely", asy
 
 test("MCP protected-resource metadata and bearer issuer selector support jace-auth alongside local issuer", () => {
   const localIssuer = "https://toyota.example.test/api/auth";
-  const jaceCfg = { issuer: "https://jace-auth.vercel.app" };
+  const resource = "https://toyota.example.test/api/mcp";
+  const jaceCfg = { issuer: "https://jace-auth.vercel.app", mcpResource: resource };
 
-  assert.deepEqual(getMcpAuthorizationServers(localIssuer, null), [localIssuer]);
-  assert.deepEqual(getMcpAuthorizationServers(localIssuer, jaceCfg), [
+  assert.deepEqual(getMcpAuthorizationServers(localIssuer, null, resource), [localIssuer]);
+  assert.deepEqual(getMcpAuthorizationServers(localIssuer, jaceCfg, resource), [
     "https://jace-auth.vercel.app",
     localIssuer,
   ]);
-  assert.deepEqual(getMcpAuthorizationServers(jaceCfg.issuer, jaceCfg), [jaceCfg.issuer]);
+  assert.deepEqual(getMcpAuthorizationServers(jaceCfg.issuer, jaceCfg, resource), [jaceCfg.issuer]);
+
+  assert.deepEqual(getMcpAuthorizationServers(localIssuer, { ...jaceCfg, mcpResource: "https://different.example/mcp" }, resource), [localIssuer]);
 
   const jaceJwt = `Bearer ${makeFakeJwt({ iss: "https://jace-auth.vercel.app", sub: "u1" })}`;
   const localJwt = `Bearer ${makeFakeJwt({ iss: localIssuer, sub: "u1" })}`;
@@ -361,5 +364,5 @@ test("MCP route and protected-resource metadata route wire jace-auth alongside l
   assert.match(mcpRoute, /localOAuthMcpHandler/);
   assert.match(mcpRoute, /jwksUrl/);
   assert.match(mcpRoute, /providerId/);
-  assert.match(metaRoute, /getMcpAuthorizationServers\(authIssuerURL,\s*jaceOAuth\)/);
+  assert.match(metaRoute, /getMcpAuthorizationServers\(authIssuerURL,\s*jaceOAuth,\s*mcpResourceURL\)/);
 });

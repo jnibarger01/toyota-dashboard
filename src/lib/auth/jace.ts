@@ -134,9 +134,10 @@ export function buildJaceEndSessionUrl(opts: {
  */
 export function getMcpAuthorizationServers(
   localIssuer: string,
-  jaceConfig: Pick<JaceAuthConfig, "issuer"> | null,
+  jaceConfig: Pick<JaceAuthConfig, "issuer" | "mcpResource"> | null,
+  resource: string,
 ): string[] {
-  if (!jaceConfig) return [localIssuer];
+  if (!jaceConfig || jaceConfig.mcpResource !== resource) return [localIssuer];
   if (jaceConfig.issuer === localIssuer) return [localIssuer];
   return [jaceConfig.issuer, localIssuer];
 }
