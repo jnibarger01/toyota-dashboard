@@ -98,8 +98,15 @@ export function getJaceAuthConfig(
 export function sanitizePostLogoutPath(redirectTo: unknown): string {
   if (typeof redirectTo !== "string") return "/";
   const trimmed = redirectTo.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return "/";
-  return trimmed;
+  if (!trimmed.startsWith("/") || /[\\\u0000-\u001f\u007f]/.test(trimmed)) return "/";
+  try {
+    const origin = "https://local.invalid";
+    const url = new URL(trimmed, origin);
+    if (url.origin !== origin) return "/";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/";
+  }
 }
 
 /**

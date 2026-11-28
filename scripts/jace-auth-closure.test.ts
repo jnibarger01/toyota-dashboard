@@ -133,6 +133,9 @@ test("post-logout path sanitization blocks open redirects and builds valid end-s
   assert.equal(sanitizePostLogoutPath("/login?signedOut=1"), "/login?signedOut=1");
   assert.equal(sanitizePostLogoutPath("https://evil.example/phish"), "/");
   assert.equal(sanitizePostLogoutPath("//evil.example/phish"), "/");
+  assert.equal(sanitizePostLogoutPath("/\\evil.example/phish"), "/");
+  assert.equal(sanitizePostLogoutPath("/\t/evil.example/phish"), "/");
+  assert.equal(sanitizePostLogoutPath("/\n/evil.example/phish"), "/");
   assert.equal(sanitizePostLogoutPath("javascript:alert(1)"), "/");
   assert.equal(sanitizePostLogoutPath(undefined), "/");
 
